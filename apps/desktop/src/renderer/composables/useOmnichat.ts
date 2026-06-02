@@ -1,4 +1,5 @@
 import { nextTick, reactive } from 'vue'
+import { errorMessage } from '@shared/errors'
 import { Room, RoomEvent, Track, type Participant, type RemoteTrack } from 'livekit-client'
 import {
   playOutgoingRingback,
@@ -111,8 +112,7 @@ const stopInactivityWatch = (): void => {
   }
 }
 
-const toMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "L'appel a echoue."
+const toMessage = (error: unknown): string => errorMessage(error, "L'appel a echoue.")
 
 const api = () => {
   if (!window.omnidesk) {
@@ -188,10 +188,14 @@ const syncFromRoom = (): void => {
   state.roster = roster
 
   const local = room.localParticipant
-  state.micOn = Boolean(local.getTrackPublication(Track.Source.Microphone)?.track
-    && !local.getTrackPublication(Track.Source.Microphone)?.isMuted)
-  state.cameraOn = Boolean(local.getTrackPublication(Track.Source.Camera)?.track
-    && !local.getTrackPublication(Track.Source.Camera)?.isMuted)
+  state.micOn = Boolean(
+    local.getTrackPublication(Track.Source.Microphone)?.track &&
+    !local.getTrackPublication(Track.Source.Microphone)?.isMuted,
+  )
+  state.cameraOn = Boolean(
+    local.getTrackPublication(Track.Source.Camera)?.track &&
+    !local.getTrackPublication(Track.Source.Camera)?.isMuted,
+  )
   state.screenShareOn = Boolean(local.getTrackPublication(Track.Source.ScreenShare)?.track)
 }
 
@@ -410,7 +414,11 @@ const startCall = async (opts: {
 }
 
 // Rejoint un appel ad-hoc existant (sur invitation recue).
-const acceptCall = async (opts: { callId: string; room: string; title?: string }): Promise<void> => {
+const acceptCall = async (opts: {
+  callId: string
+  room: string
+  title?: string
+}): Promise<void> => {
   await connectToRoom(opts.callId, opts.room, opts.title ?? 'Appel', false)
 }
 
@@ -501,6 +509,17 @@ const toggleRecording = async (): Promise<void> => {
   }
 }
 
+// Met la piste video d'une tuile en plein ecran (API Fullscreen du navigateur). Utile
+// surtout pour un partage d'ecran. La sortie (Echap) est geree par le navigateur.
+const requestTileFullscreen = (key: string): void => {
+  const element = videoEls.get(key)
+  if (element) {
+    void element.requestFullscreen().catch(() => {
+      // Plein ecran refuse (rare) : on ignore.
+    })
+  }
+}
+
 // Ref callback du <video> de chaque tuile : attache (ou detache) la piste.
 const bindVideo = (key: string, element: HTMLVideoElement | null): void => {
   if (element) {
@@ -532,4 +551,5 @@ export const useOmnichat = () => ({
   toggleScreenShare,
   toggleRecording,
   bindVideo,
+  requestTileFullscreen,
 })

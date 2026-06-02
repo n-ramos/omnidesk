@@ -1,6 +1,6 @@
 export interface WebServicePreset {
   /** Sert aussi d'identifiant de logo (ProviderLogo). */
-  id: 'slack' | 'teams'
+  id: 'slack' | 'teams' | 'outlook'
   label: string
   url: string
   description: string
@@ -22,5 +22,11 @@ export const WEB_SERVICE_PRESETS: readonly WebServicePreset[] = [
     label: 'Microsoft Teams',
     url: 'https://teams.microsoft.com',
     description: 'Ouvrir Teams en mode web (session isolee)',
+  },
+  {
+    id: 'outlook',
+    label: 'Microsoft Outlook',
+    url: 'https://outlook.office.com/mail/',
+    description: 'Ouvrir Outlook en mode web (session isolee)',
   },
 ]

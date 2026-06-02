@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { errorMessage } from '@shared/errors'
 import {
   ArrowLeft,
   Check,
@@ -45,10 +46,10 @@ const typingLabel = computed(() =>
 )
 const showReadReceipt = computed(
   () =>
-    isOmnichat.value
-    && conversation.value !== undefined
-    && omnichatStore.readByConversation[conversation.value.id] === true
-    && conversation.value.messages.at(-1)?.direction === 'outgoing',
+    isOmnichat.value &&
+    conversation.value !== undefined &&
+    omnichatStore.readByConversation[conversation.value.id] === true &&
+    conversation.value.messages.at(-1)?.direction === 'outgoing',
 )
 
 const onComposerInput = (): void => {
@@ -127,6 +128,26 @@ watch(
 )
 onBeforeUnmount(() => omnichatStore.watchGroup(null))
 
+// Appel de groupe actif joignable : un membre a lance un appel dans ce groupe et on n'y
+// est pas (encore). Bouton "Rejoindre l'appel" (notification passive, pas de sonnerie).
+const activeGroupCall = computed(() =>
+  isOmnichatGroup.value && conversation.value
+    ? omnichatStore.activeGroupCalls[conversation.value.id]
+    : undefined,
+)
+const canJoinGroupCall = computed(
+  () =>
+    activeGroupCall.value !== undefined && omnichat.state.callId !== activeGroupCall.value.callId,
+)
+const joinGroupCall = async (): Promise<void> => {
+  const conv = conversation.value
+  if (!conv) {
+    return
+  }
+  openCallOverlay()
+  await omnichatStore.joinGroupCall(conv.id)
+}
+
 const MAX_ATTACHMENTS = 10
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
@@ -139,9 +160,7 @@ const pendingAttachments = ref<File[]>([])
 const attachmentError = ref<string | undefined>(undefined)
 
 const canSend = computed(
-  () =>
-    !isSending.value
-    && (draft.value.trim().length > 0 || pendingAttachments.value.length > 0),
+  () => !isSending.value && (draft.value.trim().length > 0 || pendingAttachments.value.length > 0),
 )
 
 watch(
@@ -278,7 +297,7 @@ const onToggleReaction = async (messageId: string, name: string): Promise<void> 
   try {
     await store.toggleReaction(messageId, name)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'La reaction a echoue.'
+    const message = errorMessage(error, 'La reaction a echoue.')
     showReactionFeedback(`Reaction "${name}" : ${message}`)
   }
 }
@@ -344,9 +363,7 @@ const kindIcon = computed(() => {
   }
 })
 
-const isImapConversation = computed(
-  () => conversation.value?.providerId === 'imap',
-)
+const isImapConversation = computed(() => conversation.value?.providerId === 'imap')
 
 const exitConversation = (): void => {
   store.selectedConversation = undefined
@@ -373,7 +390,9 @@ const formatTimestamp = (value?: string): string => {
 </script>
 
 <template>
-  <article class="relative flex h-full min-h-0 flex-col rounded-r-xl border-y border-r border-white/[0.04] bg-ink-950/94">
+  <article
+    class="relative flex h-full min-h-0 flex-col rounded-r-xl border-y border-r border-white/[0.04] bg-ink-950/94"
+  >
     <header
       v-if="conversation"
       class="flex h-[68px] shrink-0 items-center justify-between border-b border-white/[0.04] px-5"
@@ -388,7 +407,9 @@ const formatTimestamp = (value?: string): string => {
         >
           <ArrowLeft :size="18" />
         </button>
-        <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-zinc-200">
+        <span
+          class="grid size-10 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-zinc-200"
+        >
           <component :is="kindIcon" :size="18" />
         </span>
         <div class="min-w-0">
@@ -445,14 +466,32 @@ const formatTimestamp = (value?: string): string => {
         >
           <Phone :size="18" />
         </button>
-        <StatusBadge tone="neutral">
-          {{ conversation.messages.length }} messages
-        </StatusBadge>
+        <StatusBadge tone="neutral"> {{ conversation.messages.length }} messages </StatusBadge>
         <StatusBadge v-if="conversation.unreadCount > 0" tone="info">
           {{ conversation.unreadCount }} non lus
         </StatusBadge>
       </div>
     </header>
+
+    <!-- Appel de groupe en cours : bouton Rejoindre (notification passive, pas de sonnerie). -->
+    <button
+      v-if="canJoinGroupCall"
+      class="flex shrink-0 items-center gap-2 border-b border-accent-mint/20 bg-accent-mint/[0.08] px-5 py-2.5 text-left text-sm text-accent-mint transition hover:bg-accent-mint/[0.14]"
+      type="button"
+      @click="joinGroupCall"
+    >
+      <Phone :size="16" class="shrink-0" />
+      <span class="min-w-0 flex-1 truncate">
+        Appel en cours dans ce groupe{{
+          activeGroupCall?.fromPseudo ? ` (${activeGroupCall.fromPseudo})` : ''
+        }}
+      </span>
+      <span
+        class="shrink-0 rounded-md bg-accent-mint px-2.5 py-1 text-xs font-semibold text-ink-950"
+      >
+        Rejoindre l'appel
+      </span>
+    </button>
 
     <!-- Roster du groupe : les membres se voient entre eux (presence), meme hors contacts. -->
     <div
@@ -466,7 +505,9 @@ const formatTimestamp = (value?: string): string => {
         class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.05] py-1 pl-1 pr-2.5 text-xs text-zinc-300"
         :title="member.online ? 'En ligne' : 'Hors ligne'"
       >
-        <span class="relative grid size-5 place-items-center rounded-full bg-white/[0.08] text-[10px] font-semibold">
+        <span
+          class="relative grid size-5 place-items-center rounded-full bg-white/[0.08] text-[10px] font-semibold"
+        >
           {{ member.pseudo.trim().slice(0, 1).toUpperCase() || '?' }}
           <span
             class="absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-ink-950"
@@ -557,24 +598,20 @@ const formatTimestamp = (value?: string): string => {
               v-if="!isOptimisticId(message.id)"
               :reactions="message.reactions"
               :align="message.direction === 'outgoing' ? 'end' : 'start'"
-              @toggle="(name: string) => { void onToggleReaction(message.id, name) }"
+              @toggle="
+                (name: string) => {
+                  void onToggleReaction(message.id, name)
+                }
+              "
             />
           </div>
         </div>
 
-        <p
-          v-if="showReadReceipt"
-          class="px-1 text-right text-[11px] text-zinc-500"
-        >
-          Lu
-        </p>
+        <p v-if="showReadReceipt" class="px-1 text-right text-[11px] text-zinc-500">Lu</p>
       </div>
     </div>
 
-    <footer
-      v-if="conversation"
-      class="shrink-0 border-t border-white/[0.04] bg-ink-900/65 p-4"
-    >
+    <footer v-if="conversation" class="shrink-0 border-t border-white/[0.04] bg-ink-900/65 p-4">
       <div class="mx-auto max-w-3xl">
         <p
           v-if="reactionFeedback"
@@ -585,10 +622,7 @@ const formatTimestamp = (value?: string): string => {
         <div
           class="rounded-2xl bg-ink-950/70 p-3 shadow-line transition focus-within:ring-1 focus-within:ring-accent-mint/40"
         >
-          <div
-            v-if="pendingAttachments.length > 0"
-            class="mb-2 flex flex-wrap gap-2"
-          >
+          <div v-if="pendingAttachments.length > 0" class="mb-2 flex flex-wrap gap-2">
             <div
               v-for="(file, index) in pendingAttachments"
               :key="`${file.name}:${index}`"
@@ -614,10 +648,7 @@ const formatTimestamp = (value?: string): string => {
               </button>
             </div>
           </div>
-          <p
-            v-if="attachmentError"
-            class="mb-2 text-xs text-rose-300"
-          >
+          <p v-if="attachmentError" class="mb-2 text-xs text-rose-300">
             {{ attachmentError }}
           </p>
           <textarea
@@ -629,15 +660,11 @@ const formatTimestamp = (value?: string): string => {
             :disabled="isSending"
             @keydown="onKeydown"
             @input="onComposerInput"
-            @blur="isOmnichat && conversation ? omnichatStore.stopTypingNow(conversation.id) : undefined"
+            @blur="
+              isOmnichat && conversation ? omnichatStore.stopTypingNow(conversation.id) : undefined
+            "
           />
-          <input
-            ref="fileInputRef"
-            type="file"
-            multiple
-            class="hidden"
-            @change="onFilesSelected"
-          />
+          <input ref="fileInputRef" type="file" multiple class="hidden" @change="onFilesSelected" />
           <div class="mt-2 flex items-center justify-between">
             <div class="flex items-center gap-1">
               <button
@@ -652,12 +679,7 @@ const formatTimestamp = (value?: string): string => {
               <EmojiPickerPopover @select="insertEmoji" />
               <TenorPickerPopover @select="insertTenorGif" />
             </div>
-            <BaseButton
-              :disabled="!canSend"
-              variant="primary"
-              type="button"
-              @click="send"
-            >
+            <BaseButton :disabled="!canSend" variant="primary" type="button" @click="send">
               <Spinner v-if="isSending" :size="15" label="Envoi du message" />
               <Send v-else :size="15" />
               {{ isSending ? 'Envoi...' : 'Envoyer' }}
@@ -667,12 +689,11 @@ const formatTimestamp = (value?: string): string => {
       </div>
     </footer>
 
-    <section
-      v-else
-      class="grid min-h-0 flex-1 place-items-center px-8 py-12 text-center"
-    >
+    <section v-else class="grid min-h-0 flex-1 place-items-center px-8 py-12 text-center">
       <div class="max-w-md">
-        <div class="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-accent-mint/12 text-accent-mint shadow-line">
+        <div
+          class="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-accent-mint/12 text-accent-mint shadow-line"
+        >
           <MessageSquareText :size="24" />
         </div>
         <h3 class="text-lg font-semibold text-white">Choisissez une conversation</h3>
@@ -690,7 +711,9 @@ const formatTimestamp = (value?: string): string => {
       v-if="store.loadingConversationId && store.loadingConversationId !== conversation?.id"
       class="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-ink-950/55 backdrop-blur-[2px]"
     >
-      <div class="flex items-center gap-2 rounded-full bg-ink-900/85 px-3 py-1.5 text-xs text-zinc-300 shadow-lift">
+      <div
+        class="flex items-center gap-2 rounded-full bg-ink-900/85 px-3 py-1.5 text-xs text-zinc-300 shadow-lift"
+      >
         <Spinner :size="14" label="Ouverture de la conversation" />
         <span>Ouverture...</span>
       </div>

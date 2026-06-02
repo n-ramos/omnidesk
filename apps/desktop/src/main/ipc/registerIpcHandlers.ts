@@ -11,6 +11,7 @@ import {
   type AppNavShortcutAction,
 } from '@shared/shortcuts'
 import { eventBus } from '@main/events/eventBus'
+import { AppBackupService } from '@main/backup/appBackupService'
 import { databaseClient } from '@main/database/client'
 import { AccountRepository } from '@main/database/repositories/accountRepository'
 import { AppSettingsRepository } from '@main/database/repositories/appSettingsRepository'
@@ -208,6 +209,7 @@ export const registerIpcHandlers = (
   const appSettings = new AppSettingsRepository(db)
   const homeLayout = new HomeLayoutRepository(db)
   const browser = new BrowserService(db)
+  const appBackup = new AppBackupService(db)
 
   // Raccourcis de navigation entre apps (Cmd/Ctrl+1..9), persistes en KV et fusionnes
   // avec les defauts. Sert au menu natif et a la reponse du canal GET.
@@ -633,6 +635,20 @@ export const registerIpcHandlers = (
     z.object({ conversationId: z.string().uuid().nullable() }),
     ({ conversationId }) => {
       signalingClient.watchGroup(conversationId)
+      return { ok: true as const }
+    },
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL,
+    z.object({
+      conversationId: z.string().uuid(),
+      callId: callIdSchema,
+      room: callRoomSchema,
+      active: z.boolean(),
+    }),
+    ({ conversationId, callId, room, active }) => {
+      signalingClient.setGroupCall(conversationId, callId, room, active)
       return { ok: true as const }
     },
   )
@@ -1834,5 +1850,72 @@ export const registerIpcHandlers = (
     IPC_CHANNELS.PASSVAULT_FIND_FOR_ORIGIN,
     z.object({ origin: z.string().max(2048) }),
     ({ origin }) => passVault.findForOrigin(origin),
+  )
+
+  // Sauvegarde complete de l'app : exporte toute la base dans un fichier chiffre par un mot de
+  // passe choisi (cf. AppBackupService). Le mot de passe ne doit jamais etre journalise.
+  registerValidatedHandler(
+    IPC_CHANNELS.BACKUP_EXPORT,
+    z.object({ password: z.string().min(1).max(1024) }),
+    async ({ password }, event) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const options: Electron.SaveDialogOptions = {
+        title: 'Exporter une sauvegarde Omnidesk',
+        defaultPath: 'omnidesk-sauvegarde.json',
+        filters: [{ name: 'Sauvegarde Omnidesk', extensions: ['json'] }],
+      }
+      const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+      if (result.canceled || !result.filePath) {
+        return { saved: false as const }
+      }
+      await writeFile(result.filePath, await appBackup.buildBackup(password), 'utf8')
+      return { saved: true as const }
+    },
+    { redactPayload: true },
+  )
+
+  // Restauration : remplace integralement la base par la sauvegarde, puis redemarre l'app pour
+  // repartir d'un etat 100% coherent (coffre, connexions, renderer). Le dechiffrement est fait
+  // AVANT tout effet de bord : un mot de passe errone echoue sans rien modifier.
+  registerValidatedHandler(
+    IPC_CHANNELS.BACKUP_IMPORT,
+    z.object({ password: z.string().min(1).max(1024) }),
+    async ({ password }, event) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const options: Electron.OpenDialogOptions = {
+        title: 'Restaurer une sauvegarde Omnidesk',
+        properties: ['openFile'],
+        filters: [{ name: 'Sauvegarde Omnidesk', extensions: ['json'] }],
+      }
+      const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+      const file = result.filePaths[0]
+      if (result.canceled || !file) {
+        return { restored: false as const }
+      }
+
+      const decoded = await appBackup.decode(await readFile(file, 'utf8'), password)
+      // A partir d'ici on remplace la base : on fige les ecritures concurrentes (synchro, rappels,
+      // signalisation) pour qu'aucune ne s'intercale entre la restauration et le redemarrage.
+      syncEngine.stop()
+      reminderScheduler.stop()
+      signalingClient.stop()
+      try {
+        appBackup.apply(decoded)
+        return { restored: true as const }
+      } finally {
+        // Reussite comme echec (rollback) : les services sont stoppes, on redemarre pour
+        // retrouver un etat propre. Le delai laisse la reponse IPC parvenir au renderer.
+        setTimeout(() => {
+          try {
+            databaseClient.close()
+          } catch {
+            // deja fermee : sans importance avant le redemarrage
+          }
+          app.relaunch()
+          app.exit(0)
+        }, 600)
+      }
+    },
+    { redactPayload: true },
   )
 }

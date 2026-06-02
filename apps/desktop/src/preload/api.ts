@@ -21,12 +21,14 @@ import type {
   CreateReminderInput,
   HomeWidgetInstance,
   LocalNotification,
+  OmnichatCallActiveEvent,
   OmnichatCallRingEvent,
   OmnichatCallStateEvent,
   OmnichatConnectionEvent,
   OmnichatGroupEvent,
   OmnichatMessageEvent,
   OmnichatPresenceEvent,
+  OmnichatReactionEvent,
   OmnichatReceiptEvent,
   OmnichatTypingEvent,
   SendMessageRequest,
@@ -180,6 +182,9 @@ export interface OmnideskApi {
     watchGroup: (
       conversationId: string | null,
     ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_WATCH_GROUP]>
+    setGroupCall: (
+      input: IpcRequestMap[typeof IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL],
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL]>
     availability: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_AVAILABILITY]>
     getIdentity: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_GET_IDENTITY]>
     setIdentity: (
@@ -266,6 +271,12 @@ export interface OmnideskApi {
     setNavShortcuts: (
       shortcuts: IpcRequestMap[typeof IPC_CHANNELS.SETTINGS_SET_NAV_SHORTCUTS]['shortcuts'],
     ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.SETTINGS_SET_NAV_SHORTCUTS]>
+    exportBackup: (
+      password: string,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.BACKUP_EXPORT]>
+    importBackup: (
+      password: string,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.BACKUP_IMPORT]>
   }
   home: {
     getLayout: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.HOME_GET_LAYOUT]>
@@ -553,6 +564,8 @@ export interface OmnideskApi {
     onOmnichatReceipt: (listener: (event: OmnichatReceiptEvent) => void) => () => void
     onOmnichatCallRing: (listener: (event: OmnichatCallRingEvent) => void) => () => void
     onOmnichatCallState: (listener: (event: OmnichatCallStateEvent) => void) => () => void
+    onOmnichatReaction: (listener: (event: OmnichatReactionEvent) => void) => () => void
+    onOmnichatCallActive: (listener: (event: OmnichatCallActiveEvent) => void) => () => void
     onPassvaultLocked: (listener: (event: PassVaultLockedEvent) => void) => () => void
   }
 }
@@ -628,6 +641,7 @@ export const omnideskApi: OmnideskApi = {
       invoke(IPC_CHANNELS.OMNICHAT_START_RECORDING, { callId, room }),
     stopRecording: (egressId) => invoke(IPC_CHANNELS.OMNICHAT_STOP_RECORDING, { egressId }),
     watchGroup: (conversationId) => invoke(IPC_CHANNELS.OMNICHAT_WATCH_GROUP, { conversationId }),
+    setGroupCall: (input) => invoke(IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL, input),
     availability: () => invoke(IPC_CHANNELS.OMNICHAT_AVAILABILITY, undefined),
     getIdentity: () => invoke(IPC_CHANNELS.OMNICHAT_GET_IDENTITY, undefined),
     setIdentity: (pseudo) => invoke(IPC_CHANNELS.OMNICHAT_SET_IDENTITY, { pseudo }),
@@ -666,6 +680,8 @@ export const omnideskApi: OmnideskApi = {
     getNavShortcuts: () => invoke(IPC_CHANNELS.SETTINGS_GET_NAV_SHORTCUTS, undefined),
     setNavShortcuts: (shortcuts) =>
       invoke(IPC_CHANNELS.SETTINGS_SET_NAV_SHORTCUTS, { shortcuts }),
+    exportBackup: (password) => invoke(IPC_CHANNELS.BACKUP_EXPORT, { password }),
+    importBackup: (password) => invoke(IPC_CHANNELS.BACKUP_IMPORT, { password }),
   },
   home: {
     getLayout: () => invoke(IPC_CHANNELS.HOME_GET_LAYOUT, undefined),
@@ -983,6 +999,28 @@ export const omnideskApi: OmnideskApi = {
 
       ipcRenderer.on(PRELOAD_EVENTS.OMNICHAT_CALL_STATE, wrappedListener)
       return () => ipcRenderer.off(PRELOAD_EVENTS.OMNICHAT_CALL_STATE, wrappedListener)
+    },
+    onOmnichatReaction: (listener) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        payload: OmnichatReactionEvent,
+      ): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.OMNICHAT_REACTION, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.OMNICHAT_REACTION, wrappedListener)
+    },
+    onOmnichatCallActive: (listener) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        payload: OmnichatCallActiveEvent,
+      ): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.OMNICHAT_CALL_ACTIVE, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.OMNICHAT_CALL_ACTIVE, wrappedListener)
     },
     onPassvaultLocked: (listener) => {
       const wrappedListener = (

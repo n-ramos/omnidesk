@@ -130,6 +130,27 @@ const showFavicon = computed(
     />
   </svg>
 
+  <svg
+    v-else-if="providerId === 'outlook'"
+    :width="size"
+    :height="size"
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <rect x="10" y="7" width="12" height="11" rx="1.4" fill="#0F6CBD" />
+    <path
+      d="M10.4 8.4l5.1 3.4a1.1 1.1 0 0 0 1.2 0l4.9-3.3"
+      stroke="#FFFFFF"
+      stroke-width="1.1"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <rect x="2" y="4.5" width="10.2" height="15" rx="2" fill="#0364B8" />
+    <ellipse cx="7.1" cy="12" rx="2.7" ry="3.1" fill="none" stroke="#FFFFFF" stroke-width="1.7" />
+  </svg>
+
   <img
     v-else-if="showFavicon"
     :src="faviconUrl"

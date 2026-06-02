@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import {
   AlertTriangle,
   Loader2,
+  Maximize2,
   Mic,
   MicOff,
   Minimize2,
@@ -284,7 +285,7 @@ watch(
           <div
             v-for="cell in cells"
             :key="cell.key"
-            class="relative aspect-video overflow-hidden rounded-2xl bg-ink-900 shadow-line ring-1 ring-inset transition"
+            class="group relative aspect-video overflow-hidden rounded-2xl bg-ink-900 shadow-line ring-1 ring-inset transition"
             :class="cell.speaking ? 'ring-accent-mint/70' : 'ring-white/[0.04]'"
           >
             <video
@@ -295,12 +296,24 @@ watch(
               :muted="cell.isLocal"
               class="size-full object-cover"
               :class="{ '-scale-x-100': cell.isLocal && cell.source === 'camera' }"
+              @dblclick="omnichat.requestTileFullscreen(cell.tileKey as string)"
             />
             <div v-else class="grid size-full place-items-center">
               <span class="grid size-16 place-items-center rounded-full bg-white/[0.06] text-xl font-semibold text-zinc-200">
                 {{ initials(cell.name) }}
               </span>
             </div>
+
+            <!-- Plein ecran de la tuile (double-clic aussi). Utile pour un partage d'ecran. -->
+            <button
+              v-if="cell.tileKey"
+              class="absolute right-2 top-2 grid size-8 place-items-center rounded-lg bg-black/40 text-white opacity-0 transition hover:bg-black/60 group-hover:opacity-100"
+              type="button"
+              :title="cell.source === 'screen' ? 'Plein ecran (partage d ecran)' : 'Plein ecran'"
+              @click="omnichat.requestTileFullscreen(cell.tileKey as string)"
+            >
+              <Maximize2 :size="15" />
+            </button>
 
             <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-3 py-2">
               <span class="truncate text-sm font-medium text-white">{{ cell.name }}</span>
@@ -381,3 +394,12 @@ watch(
     </div>
   </Transition>
 </template>
+
+<style>
+/* En plein ecran, on n'affiche pas la video en "cover" (qui rognerait) : un partage
+   d'ecran doit etre visible en entier. Fond noir pour les bords letterboxes. */
+video:fullscreen {
+  object-fit: contain;
+  background: #000;
+}
+</style>

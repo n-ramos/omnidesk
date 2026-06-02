@@ -3,7 +3,7 @@ import type { OmniBrowserShortcutAction } from './shortcuts'
 export type ISODateString = string
 export type UUID = string
 
-export type ProviderKind = 'teams' | 'slack' | 'imap' | 'webpage' | 'omnichat'
+export type ProviderKind = 'teams' | 'slack' | 'outlook' | 'imap' | 'webpage' | 'omnichat'
 
 export type ProviderCapability =
   | 'password-auth'
@@ -578,6 +578,22 @@ export interface OmnichatCallStateEvent {
   from: string
   state: 'accepted' | 'declined' | 'canceled'
   reason?: 'busy' | 'declined' | 'timeout' | 'unavailable'
+}
+
+// Une reaction (emoji) a ete appliquee/retiree sur un message d'une conversation : le
+// renderer recharge la conversation ouverte pour rafraichir les reactions.
+export interface OmnichatReactionEvent {
+  conversationId: UUID
+}
+
+// Un appel de groupe est devenu actif (active=true) ou s'est termine (active=false) :
+// le renderer affiche/retire le bouton "Rejoindre l'appel" pour ce groupe.
+export interface OmnichatCallActiveEvent {
+  conversationId: UUID
+  callId: string
+  room: string
+  fromPseudo?: string
+  active: boolean
 }
 
 // --- Omnipass (coffre de mots de passe zero-knowledge) --------------------

@@ -4,6 +4,7 @@ import type { MessageReactionSummary, ToggleReactionRequest } from '@shared/mode
 import { AccountRepository } from '@main/database/repositories/accountRepository'
 import { MessageRepository } from '@main/database/repositories/messageRepository'
 import { tokenVault } from '@main/security/tokenVault'
+import { signalingClient } from '@main/omnichat/signalingClient'
 import { providerRegistry } from './providerRegistry'
 
 const resolveSelfExternalUserId = (settings: Record<string, unknown>): string | undefined => {
@@ -29,6 +30,12 @@ export class ReactionToggleService {
     const context = this.messages.findReactionContext(request.messageId)
     if (!context) {
       throw new AppError('DATABASE_ERROR', 'Ce message est introuvable pour reagir.')
+    }
+
+    // Omnichat : pas d'API provider. On applique la reaction en local et on la relaie au
+    // pair/groupe par WebSocket (le destinataire l'applique de son cote via reaction-in).
+    if (context.providerId === 'omnichat') {
+      return this.toggleOmnichat(request, context, name)
     }
 
     const account = this.accounts.get(context.accountId)
@@ -97,6 +104,30 @@ export class ReactionToggleService {
       this.messages.removeReaction(request.messageId, name, selfExternalUserId)
     }
 
+    return this.messages.getReactionsForMessage(request.messageId)
+  }
+
+  // Reaction sur un message omnichat : applique en local (self) + relai WS au pair/groupe.
+  private toggleOmnichat(
+    request: ToggleReactionRequest,
+    context: { externalConversationId: string; externalMessageId: string },
+    name: string,
+  ): MessageReactionSummary[] {
+    const selfId = signalingClient.currentIdentity()?.id
+    if (!selfId) {
+      throw new AppError('AUTH_REQUIRED', 'Choisissez un pseudo omnichat avant de reagir.')
+    }
+    if (request.enabled) {
+      this.messages.addReaction(request.messageId, name, selfId, true)
+    } else {
+      this.messages.removeReaction(request.messageId, name, selfId)
+    }
+    signalingClient.sendReaction(
+      context.externalConversationId,
+      context.externalMessageId,
+      name,
+      request.enabled ? 'add' : 'remove',
+    )
     return this.messages.getReactionsForMessage(request.messageId)
   }
 }

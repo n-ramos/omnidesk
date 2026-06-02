@@ -370,6 +370,36 @@ export class SignalingClient {
     this.send({ t: 'call-invite', to: { kind: 'dm', userId: userId.trim() }, callId, room, media })
   }
 
+  // Reaction (emoji) sur un message : relayee au pair/groupe (best-effort, silencieux hors-ligne).
+  sendReaction(
+    externalConversationId: string,
+    serverMsgId: string,
+    name: string,
+    op: 'add' | 'remove',
+  ): void {
+    const self = this.currentSelf()
+    if (!this.ready || !self || !this.messageService) {
+      return
+    }
+    const target = this.messageService.targetFromExternal(self, externalConversationId)
+    if (target) {
+      this.send({ t: 'reaction', to: target, serverMsgId, name, op })
+    }
+  }
+
+  // Declare/retire l'appel courant comme "appel du groupe" : les membres voient un bouton
+  // Rejoindre (notification passive, pas de sonnerie). No-op hors d'une conversation de groupe.
+  setGroupCall(conversationId: string, callId: string, room: string, active: boolean): void {
+    const self = this.currentSelf()
+    if (!this.ready || !self || !this.messageService) {
+      return
+    }
+    const target = this.messageService.targetForConversation(self, conversationId)
+    if (target && target.kind === 'group') {
+      this.send({ t: 'call-group', groupId: target.groupId, callId, room, active })
+    }
+  }
+
   // accept/decline/cancel ciblent la contrepartie (le `from` du ring) par son identifiant,
   // sans dependre d'une conversation : un appel n'est plus rattache a une conversation.
   callAccept(counterpartId: string, callId: string): void {
@@ -630,6 +660,22 @@ export class SignalingClient {
         }
         return
       }
+      case 'reaction-in': {
+        const self = this.currentSelf()
+        if (self && this.messageService) {
+          const result = this.messageService.applyIncomingReaction(
+            self,
+            env.from,
+            env.serverMsgId,
+            env.name,
+            env.op,
+          )
+          if (result) {
+            eventBus.emit('omnichat:reaction', { conversationId: result.conversationId })
+          }
+        }
+        return
+      }
       case 'call-ring': {
         // Appel ad-hoc : independant des conversations. On affiche un appel entrant avec
         // le nom de l'appelant (pseudo porte par le ring, sinon contact/groupe connu, sinon id).
@@ -656,6 +702,22 @@ export class SignalingClient {
       case 'call-canceled':
         eventBus.emit('omnichat:call-state', { callId: env.callId, from: env.from, state: 'canceled' })
         return
+      case 'call-active': {
+        const self = this.currentSelf()
+        if (self && this.messageService) {
+          const conversationId = this.messageService.localGroupConversationId(self, env.groupId)
+          if (conversationId) {
+            eventBus.emit('omnichat:call-active', {
+              conversationId,
+              callId: env.callId,
+              room: env.room,
+              fromPseudo: env.fromPseudo,
+              active: env.active,
+            })
+          }
+        }
+        return
+      }
       case 'error':
         if (env.code === 'AUTH_INVALID') {
           // Identite refusee (jeton manquant/invalide) : inutile de boucler en

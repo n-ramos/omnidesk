@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { errorMessage } from '@shared/errors'
 import { useBrowserStore } from '@renderer/stores/browserStore'
 import { useOmnichatStore } from '@renderer/stores/omnichatStore'
 import { readStoredAccent } from '@renderer/utils/accentColor'
@@ -57,11 +58,7 @@ const startupToAppView = (view: StartupView): AppView => {
       return 'home'
   }
 }
-export type AccountWorkflowStep =
-  | 'closed'
-  | 'choose-provider'
-  | 'imap-form'
-  | 'webpage-form'
+export type AccountWorkflowStep = 'closed' | 'choose-provider' | 'imap-form' | 'webpage-form'
 
 export interface ConversationGroup {
   kind: ConversationKind | 'other'
@@ -168,16 +165,14 @@ const fallbackProviders = (): ProviderDescriptor[] => [
 const providerPriority: Record<ProviderKind, number> = {
   slack: 0,
   teams: 1,
-  imap: 2,
-  webpage: 3,
-  omnichat: 4,
+  outlook: 2,
+  imap: 3,
+  webpage: 4,
+  omnichat: 5,
 }
 
 const sortProviders = (providers: ProviderDescriptor[]): ProviderDescriptor[] =>
   [...providers].sort((left, right) => providerPriority[left.id] - providerPriority[right.id])
-
-const safeMessage = (error: unknown, fallback: string): string =>
-  error instanceof Error ? error.message : fallback
 
 const safeCall = async <T>(
   factory: () => Promise<T>,
@@ -185,7 +180,11 @@ const safeCall = async <T>(
   timeoutMs = 2500,
 ): Promise<T> => withTimeout(factory(), fallbackMessage, timeoutMs)
 
-const withTimeout = async <T>(promise: Promise<T>, fallbackMessage: string, timeoutMs = 2500): Promise<T> => {
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  fallbackMessage: string,
+  timeoutMs = 2500,
+): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
 
   try {
@@ -269,10 +268,8 @@ export const useAppStore = defineStore('app', {
     unreadNotificationCount: (state) =>
       state.notifications.filter((notification) => !notification.readAt).length,
     hasAccounts: (state) => state.accounts.length > 0,
-    shouldShowHome: (state) =>
-      state.activeView === 'home' || state.activeView === 'custom-home',
-    homeView: (state): AppView =>
-      state.startupView === 'custom-home' ? 'custom-home' : 'home',
+    shouldShowHome: (state) => state.activeView === 'home' || state.activeView === 'custom-home',
+    homeView: (state): AppView => (state.startupView === 'custom-home' ? 'custom-home' : 'home'),
     availableProviders: (state): ProviderDescriptor[] =>
       // omnichat (messagerie native) n'est pas un compte a "ajouter" : il a sa
       // propre vue dediee (bouton sous OmniBrowser). On l'exclut des listes de
@@ -310,10 +307,7 @@ export const useAppStore = defineStore('app', {
           continue
         }
 
-        counts.set(
-          notification.accountId,
-          (counts.get(notification.accountId) ?? 0) + 1,
-        )
+        counts.set(notification.accountId, (counts.get(notification.accountId) ?? 0) + 1)
       }
 
       for (const conversation of state.conversations) {
@@ -399,8 +393,7 @@ export const useAppStore = defineStore('app', {
       if (!api) {
         this.providers = fallbackProviders()
         this.activeView = startupToAppView(this.startupView)
-        this.actionFeedback =
-          "L'accueil est pret. Vous pouvez deja ajouter votre premier service."
+        this.actionFeedback = "L'accueil est pret. Vous pouvez deja ajouter votre premier service."
         this.isLoading = false
         return
       }
@@ -498,24 +491,15 @@ export const useAppStore = defineStore('app', {
           accentColorResult,
           baseColorResult,
         ] = await Promise.allSettled([
-          safeCall(() => api.app.getBootstrap(), "Le demarrage prend trop de temps."),
-          safeCall(() => api.providers.list(), "La liste des services ne repond pas."),
-          safeCall(() => api.accounts.list(), "La liste des comptes ne repond pas."),
-          safeCall(() => api.notifications.list(), "Les notifications ne repondent pas."),
-          safeCall(() => api.conversations.list(), "Les conversations ne repondent pas."),
-          safeCall(() => api.settings.getLocalStatus(), "Les reglages ne repondent pas."),
-          safeCall(
-            () => api.settings.getStartupView(),
-            "La preference d'accueil ne repond pas.",
-          ),
-          safeCall(
-            () => api.settings.getAccentColor(),
-            "La couleur d'accent ne repond pas.",
-          ),
-          safeCall(
-            () => api.settings.getBaseColor(),
-            "La couleur de fond ne repond pas.",
-          ),
+          safeCall(() => api.app.getBootstrap(), 'Le demarrage prend trop de temps.'),
+          safeCall(() => api.providers.list(), 'La liste des services ne repond pas.'),
+          safeCall(() => api.accounts.list(), 'La liste des comptes ne repond pas.'),
+          safeCall(() => api.notifications.list(), 'Les notifications ne repondent pas.'),
+          safeCall(() => api.conversations.list(), 'Les conversations ne repondent pas.'),
+          safeCall(() => api.settings.getLocalStatus(), 'Les reglages ne repondent pas.'),
+          safeCall(() => api.settings.getStartupView(), "La preference d'accueil ne repond pas."),
+          safeCall(() => api.settings.getAccentColor(), "La couleur d'accent ne repond pas."),
+          safeCall(() => api.settings.getBaseColor(), 'La couleur de fond ne repond pas.'),
         ])
 
         if (bootstrapResult.status === 'fulfilled') {
@@ -526,9 +510,12 @@ export const useAppStore = defineStore('app', {
         }
 
         this.accounts = accountsResult.status === 'fulfilled' ? accountsResult.value : []
-        this.notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
-        this.conversations = conversationsResult.status === 'fulfilled' ? conversationsResult.value : []
-        this.localStatus = localStatusResult.status === 'fulfilled' ? localStatusResult.value : undefined
+        this.notifications =
+          notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
+        this.conversations =
+          conversationsResult.status === 'fulfilled' ? conversationsResult.value : []
+        this.localStatus =
+          localStatusResult.status === 'fulfilled' ? localStatusResult.value : undefined
         if (startupViewResult.status === 'fulfilled') {
           this.startupView = startupViewResult.value.view
         }
@@ -541,7 +528,9 @@ export const useAppStore = defineStore('app', {
         this.activeView = startupToAppView(this.startupView)
 
         const hasCoreData =
-          this.providers.length > 0 || this.localStatus !== undefined || this.bootstrap !== undefined
+          this.providers.length > 0 ||
+          this.localStatus !== undefined ||
+          this.bootstrap !== undefined
 
         if (!hasCoreData) {
           const primaryFailure =
@@ -551,7 +540,7 @@ export const useAppStore = defineStore('app', {
                 ? providersResult.reason
                 : undefined
 
-          this.error = safeMessage(primaryFailure, "Impossible d'ouvrir Omnidesk.")
+          this.error = errorMessage(primaryFailure, "Impossible d'ouvrir Omnidesk.")
         } else {
           const partialFailures = [
             accountsResult,
@@ -569,7 +558,7 @@ export const useAppStore = defineStore('app', {
         this.providers = fallbackProviders()
         this.activeView = startupToAppView(this.startupView)
         this.error = undefined
-        this.actionFeedback = safeMessage(
+        this.actionFeedback = errorMessage(
           error,
           "L'accueil est ouvert, mais certaines fonctions ne sont pas encore disponibles.",
         )
@@ -605,7 +594,7 @@ export const useAppStore = defineStore('app', {
         await api.settings.setStartupView(view)
       } catch (error) {
         this.startupView = previous
-        this.error = safeMessage(error, "Impossible d'enregistrer la preference d'accueil.")
+        this.error = errorMessage(error, "Impossible d'enregistrer la preference d'accueil.")
       }
     },
 
@@ -623,7 +612,7 @@ export const useAppStore = defineStore('app', {
         await api.settings.setAccentColor(color)
       } catch (error) {
         this.accentColor = previous
-        this.error = safeMessage(error, "Impossible d'enregistrer la couleur d'accent.")
+        this.error = errorMessage(error, "Impossible d'enregistrer la couleur d'accent.")
       }
     },
 
@@ -641,7 +630,41 @@ export const useAppStore = defineStore('app', {
         await api.settings.setBaseColor(color)
       } catch (error) {
         this.baseColor = previous
-        this.error = safeMessage(error, "Impossible d'enregistrer la couleur de fond.")
+        this.error = errorMessage(error, "Impossible d'enregistrer la couleur de fond.")
+      }
+    },
+
+    // Sauvegarde complete chiffree : ouvre le selecteur de fichier cote main et ecrit l'archive.
+    // Retourne true si un fichier a bien ete ecrit (false si l'utilisateur a annule).
+    async exportBackup(password: string): Promise<boolean> {
+      const api = getApi()
+      if (!api?.settings?.exportBackup) {
+        return false
+      }
+      this.error = undefined
+      try {
+        const { saved } = await api.settings.exportBackup(password)
+        return saved
+      } catch (error) {
+        this.error = errorMessage(error, "Impossible d'exporter la sauvegarde.")
+        return false
+      }
+    },
+
+    // Restauration : le main remplace la base puis redemarre l'app. Si le mot de passe est
+    // errone ou le fichier invalide, l'erreur remonte ici et rien n'est modifie.
+    async importBackup(password: string): Promise<boolean> {
+      const api = getApi()
+      if (!api?.settings?.importBackup) {
+        return false
+      }
+      this.error = undefined
+      try {
+        const { restored } = await api.settings.importBackup(password)
+        return restored
+      } catch (error) {
+        this.error = errorMessage(error, 'Impossible de restaurer la sauvegarde.')
+        return false
       }
     },
 
@@ -691,7 +714,7 @@ export const useAppStore = defineStore('app', {
         const result = await api.settings.setNavShortcuts(shortcuts)
         this.navShortcuts = result.shortcuts
       } catch (error) {
-        this.error = safeMessage(error, "Impossible d'enregistrer le raccourci.")
+        this.error = errorMessage(error, "Impossible d'enregistrer le raccourci.")
       }
     },
 
@@ -724,7 +747,7 @@ export const useAppStore = defineStore('app', {
         this.contacts = await api.contacts.list(accountId)
         this.contactsLoadedForAccountId = accountId
       } catch (error) {
-        this.error = safeMessage(error, "Impossible de charger l'annuaire.")
+        this.error = errorMessage(error, "Impossible de charger l'annuaire.")
       } finally {
         this.isLoadingContacts = false
       }
@@ -747,7 +770,7 @@ export const useAppStore = defineStore('app', {
         await this.refreshConversations()
         await this.selectConversation(result.conversationId)
       } catch (error) {
-        this.error = safeMessage(error, "Impossible d'ouvrir cette conversation.")
+        this.error = errorMessage(error, "Impossible d'ouvrir cette conversation.")
       } finally {
         this.isWorking = false
       }
@@ -821,7 +844,7 @@ export const useAppStore = defineStore('app', {
         this.actionFeedback = `${account.label} a ete enregistre comme brouillon local.`
         this.closeAccountWorkflow()
       } catch (error) {
-        this.error = safeMessage(error, "Impossible d'enregistrer ce brouillon.")
+        this.error = errorMessage(error, "Impossible d'enregistrer ce brouillon.")
       } finally {
         this.isWorking = false
       }
@@ -838,12 +861,14 @@ export const useAppStore = defineStore('app', {
       try {
         return await api.imap.autodiscover(email)
       } catch (error) {
-        this.error = safeMessage(error, "La detection automatique a echoue.")
+        this.error = errorMessage(error, 'La detection automatique a echoue.')
         return undefined
       }
     },
 
-    async testImapConnection(input: ConnectImapAccountInput): Promise<{ ok: boolean; message?: string }> {
+    async testImapConnection(
+      input: ConnectImapAccountInput,
+    ): Promise<{ ok: boolean; message?: string }> {
       const api = getApi()
       if (!api?.imap?.test) {
         return { ok: false, message: "Le test n'est pas disponible." }
@@ -857,7 +882,7 @@ export const useAppStore = defineStore('app', {
         })
         return { ok: true }
       } catch (error) {
-        return { ok: false, message: safeMessage(error, "Le test a echoue.") }
+        return { ok: false, message: errorMessage(error, 'Le test a echoue.') }
       }
     },
 
@@ -878,7 +903,7 @@ export const useAppStore = defineStore('app', {
         await this.reloadConnectedData()
         return true
       } catch (error) {
-        this.error = safeMessage(error, "La connexion IMAP n'a pas abouti.")
+        this.error = errorMessage(error, "La connexion IMAP n'a pas abouti.")
         return false
       } finally {
         this.isWorking = false
@@ -899,7 +924,7 @@ export const useAppStore = defineStore('app', {
       try {
         this.imapFolders[accountId] = await api.imap.listFolders(accountId)
       } catch (error) {
-        this.error = safeMessage(error, "Impossible de recuperer la liste des dossiers.")
+        this.error = errorMessage(error, 'Impossible de recuperer la liste des dossiers.')
       } finally {
         if (this.imapFoldersLoadingFor === accountId) {
           this.imapFoldersLoadingFor = undefined
@@ -930,7 +955,7 @@ export const useAppStore = defineStore('app', {
         await api.imap.selectFolder(accountId, folderPath)
         await this.refreshConversations()
       } catch (error) {
-        this.error = safeMessage(error, "Impossible de selectionner ce dossier.")
+        this.error = errorMessage(error, 'Impossible de selectionner ce dossier.')
       } finally {
         if (this.imapFolderSwitchingFor === accountId) {
           this.imapFolderSwitchingFor = undefined
@@ -959,12 +984,12 @@ export const useAppStore = defineStore('app', {
 
       try {
         await api.imap.compose({ ...input, accountId })
-        this.actionFeedback = "Message envoye."
+        this.actionFeedback = 'Message envoye.'
         this.composeOpen = false
         await this.refreshAccount(accountId)
         return true
       } catch (error) {
-        this.error = safeMessage(error, "L'envoi a echoue.")
+        this.error = errorMessage(error, "L'envoi a echoue.")
         return false
       } finally {
         this.isWorking = false
@@ -989,16 +1014,13 @@ export const useAppStore = defineStore('app', {
         await api.imap.deleteConversation(conversationId)
         return true
       } catch (error) {
-        this.error = safeMessage(error, "La suppression a echoue.")
+        this.error = errorMessage(error, 'La suppression a echoue.')
         await this.silentReload()
         return false
       }
     },
 
-    async moveImapConversation(
-      conversationId: UUID,
-      folderPath: string,
-    ): Promise<boolean> {
+    async moveImapConversation(conversationId: UUID, folderPath: string): Promise<boolean> {
       const api = getApi()
       if (!api?.imap?.moveConversation) {
         this.error = "Le deplacement n'est pas disponible."
@@ -1017,7 +1039,7 @@ export const useAppStore = defineStore('app', {
         this.actionFeedback = 'Conversation deplacee.'
         return true
       } catch (error) {
-        this.error = safeMessage(error, "Le deplacement a echoue.")
+        this.error = errorMessage(error, 'Le deplacement a echoue.')
         await this.silentReload()
         return false
       }
@@ -1034,7 +1056,7 @@ export const useAppStore = defineStore('app', {
           localConversation.unreadCount = read ? 0 : Math.max(localConversation.unreadCount, 1)
         }
       } catch (error) {
-        this.error = safeMessage(error, "Impossible de modifier l'etat de lecture.")
+        this.error = errorMessage(error, "Impossible de modifier l'etat de lecture.")
       }
     },
 
@@ -1056,7 +1078,7 @@ export const useAppStore = defineStore('app', {
         }
         return result.inserted
       } catch (error) {
-        this.error = safeMessage(error, "Impossible de charger plus de messages.")
+        this.error = errorMessage(error, 'Impossible de charger plus de messages.')
         return 0
       } finally {
         if (this.imapLoadingMoreFor === accountId) {
@@ -1084,7 +1106,7 @@ export const useAppStore = defineStore('app', {
         this.activeView = 'inbox'
         return true
       } catch (error) {
-        this.error = safeMessage(error, "L'ajout de la page web n'a pas abouti.")
+        this.error = errorMessage(error, "L'ajout de la page web n'a pas abouti.")
         return false
       } finally {
         this.isWorking = false
@@ -1105,7 +1127,7 @@ export const useAppStore = defineStore('app', {
           this.accounts.splice(index, 1, updated)
         }
       } catch (error) {
-        this.error = safeMessage(error, "Impossible de changer cette option.")
+        this.error = errorMessage(error, 'Impossible de changer cette option.')
       }
     },
 
@@ -1123,7 +1145,7 @@ export const useAppStore = defineStore('app', {
           this.accounts.splice(index, 1, updated)
         }
       } catch (error) {
-        this.error = safeMessage(error, "Impossible de changer le blocage des pubs.")
+        this.error = errorMessage(error, 'Impossible de changer le blocage des pubs.')
       }
     },
 
@@ -1317,7 +1339,7 @@ export const useAppStore = defineStore('app', {
         try {
           outgoing = await Promise.all(files.map(fileToOutgoingAttachment))
         } catch (error) {
-          this.error = safeMessage(error, "Impossible de lire les fichiers selectionnes.")
+          this.error = errorMessage(error, 'Impossible de lire les fichiers selectionnes.')
           throw error
         }
 
@@ -1370,9 +1392,8 @@ export const useAppStore = defineStore('app', {
           }
         }
 
-        this.actionFeedback = conversation.providerId === 'imap'
-          ? 'Reponse envoyee.'
-          : 'Message envoye.'
+        this.actionFeedback =
+          conversation.providerId === 'imap' ? 'Reponse envoyee.' : 'Message envoye.'
         if (conversation.providerId === 'omnichat') {
           const omnichatStore = useOmnichatStore()
           omnichatStore.markOutgoingSent(conversation.id)
@@ -1387,7 +1408,7 @@ export const useAppStore = defineStore('app', {
             current.messages.splice(index, 1)
           }
         }
-        this.error = safeMessage(error, "L'envoi du message a echoue.")
+        this.error = errorMessage(error, "L'envoi du message a echoue.")
         throw error
       }
     },
@@ -1443,7 +1464,7 @@ export const useAppStore = defineStore('app', {
         }
       } catch (error) {
         message.reactions = snapshot
-        this.error = safeMessage(error, "L'action sur la reaction a echoue.")
+        this.error = errorMessage(error, "L'action sur la reaction a echoue.")
         throw error
       }
     },
@@ -1473,7 +1494,7 @@ export const useAppStore = defineStore('app', {
         await this.refreshConversations()
       } catch (error) {
         this.notifications = previous
-        this.error = safeMessage(error, "Impossible d'effacer les notifications.")
+        this.error = errorMessage(error, "Impossible d'effacer les notifications.")
         throw error
       }
     },
@@ -1493,7 +1514,7 @@ export const useAppStore = defineStore('app', {
         this.actionFeedback = `${summary.conversations} conversations, ${summary.messages} messages mis a jour.`
         await this.reloadConnectedData()
       } catch (error) {
-        this.error = safeMessage(error, "La synchronisation n'a pas abouti.")
+        this.error = errorMessage(error, "La synchronisation n'a pas abouti.")
       } finally {
         this.isWorking = false
       }
@@ -1515,7 +1536,7 @@ export const useAppStore = defineStore('app', {
         this.selectedConversation = undefined
         await this.reloadConnectedData()
       } catch (error) {
-        this.error = safeMessage(error, "La deconnexion n'a pas abouti.")
+        this.error = errorMessage(error, "La deconnexion n'a pas abouti.")
       } finally {
         this.isWorking = false
       }
@@ -1539,7 +1560,7 @@ export const useAppStore = defineStore('app', {
       try {
         this.accounts = await api.accounts.reorder(orderedIds)
       } catch (error) {
-        this.error = safeMessage(error, "Le reordonnancement des comptes n'a pas abouti.")
+        this.error = errorMessage(error, "Le reordonnancement des comptes n'a pas abouti.")
         this.accounts = await api.accounts.list()
       }
     },
@@ -1566,7 +1587,8 @@ export const useAppStore = defineStore('app', {
         this.notifications = notifications
         this.localStatus = localStatus
         this.providers = sortProviders(providers)
-        this.activeView = this.accounts.length > 0 || this.conversations.length > 0 ? 'inbox' : 'home'
+        this.activeView =
+          this.accounts.length > 0 || this.conversations.length > 0 ? 'inbox' : 'home'
       } finally {
         this.isWorking = false
       }

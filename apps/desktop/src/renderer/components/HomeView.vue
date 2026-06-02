@@ -17,6 +17,8 @@ const iconTint = (id: ProviderKind): string => {
       return 'bg-accent-mint/12 text-accent-mint'
     case 'teams':
       return 'bg-accent-lilac/12 text-accent-lilac'
+    case 'outlook':
+      return 'bg-accent-sky/12 text-accent-sky'
     case 'imap':
       return 'bg-accent-gold/12 text-accent-gold'
     case 'webpage':

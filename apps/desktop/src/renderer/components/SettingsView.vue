@@ -5,6 +5,7 @@ import {
   Bird,
   Check,
   Database,
+  Download,
   Home as HomeIcon,
   Inbox,
   Keyboard,
@@ -20,6 +21,7 @@ import {
   ShieldCheck,
   Sparkles,
   Unplug,
+  Upload,
   Users,
   Volume2,
   VolumeX,
@@ -193,6 +195,53 @@ const confirmDisconnect = async (accountId: string, label: string): Promise<void
   })
   if (ok) {
     void store.disconnectAccount(accountId)
+  }
+}
+
+// --- Sauvegarde et restauration ----------------------------------------------
+const backupPassword = ref('')
+const backupBusy = ref(false)
+
+const exportBackup = async (): Promise<void> => {
+  if (backupPassword.value.length < 8) {
+    store.error = 'Le mot de passe de la sauvegarde doit faire au moins 8 caracteres.'
+    return
+  }
+  backupBusy.value = true
+  try {
+    const saved = await store.exportBackup(backupPassword.value)
+    if (saved) {
+      store.actionFeedback = 'Sauvegarde exportee'
+      backupPassword.value = ''
+    }
+  } finally {
+    backupBusy.value = false
+  }
+}
+
+const importBackup = async (): Promise<void> => {
+  if (backupPassword.value.length === 0) {
+    store.error = 'Saisissez le mot de passe de la sauvegarde a restaurer.'
+    return
+  }
+  const ok = await confirm({
+    title: 'Restaurer cette sauvegarde ?',
+    message:
+      'Toutes les donnees actuelles (comptes, messages, reglages, coffre omniPass) seront remplacees par celles de la sauvegarde, puis l\'application redemarrera.',
+    confirmLabel: 'Restaurer et redemarrer',
+    tone: 'danger',
+  })
+  if (!ok) {
+    return
+  }
+  backupBusy.value = true
+  try {
+    const restored = await store.importBackup(backupPassword.value)
+    if (restored) {
+      store.actionFeedback = 'Sauvegarde restauree, redemarrage...'
+    }
+  } finally {
+    backupBusy.value = false
   }
 }
 
@@ -802,6 +851,37 @@ const resetBase = (): void => {
         <p class="break-all text-sm leading-6 text-zinc-500">
           {{ store.localStatus?.databasePath }}
         </p>
+      </div>
+
+      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+        <div class="mb-3 flex items-center gap-3">
+          <Download class="text-accent-mint" :size="19" />
+          <h3 class="text-sm font-semibold text-white">Sauvegarde et restauration</h3>
+        </div>
+        <p class="text-sm leading-6 text-zinc-400">
+          Exporte toutes vos donnees (comptes, messages, reglages, coffre omniPass, navigateur)
+          dans un fichier chiffre par un mot de passe. La restauration remplace les donnees
+          actuelles et redemarre l'application.
+        </p>
+        <input
+          v-model="backupPassword"
+          class="mt-3 h-10 w-full rounded-lg bg-ink-950/70 px-3 text-sm text-white outline-none shadow-line"
+          type="password"
+          placeholder="Mot de passe de la sauvegarde (8 caracteres min.)"
+          autocomplete="off"
+        />
+        <div class="mt-3 flex flex-wrap gap-2">
+          <BaseButton variant="secondary" type="button" :disabled="backupBusy" @click="exportBackup">
+            <Spinner v-if="backupBusy" :size="14" label="Sauvegarde" />
+            <Download v-else :size="15" />
+            Exporter une sauvegarde
+          </BaseButton>
+          <BaseButton variant="ghost" type="button" :disabled="backupBusy" @click="importBackup">
+            <Upload :size="15" />
+            Restaurer une sauvegarde
+          </BaseButton>
+        </div>
+        <p v-if="store.error" class="mt-3 text-xs text-accent-coral">{{ store.error }}</p>
       </div>
 
       <div class="grid grid-cols-2 gap-4">

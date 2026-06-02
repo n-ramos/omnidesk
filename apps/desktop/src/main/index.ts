@@ -32,6 +32,8 @@ let stopOmnichatTypingBridge: (() => void) | undefined
 let stopOmnichatReceiptBridge: (() => void) | undefined
 let stopOmnichatCallRingBridge: (() => void) | undefined
 let stopOmnichatCallStateBridge: (() => void) | undefined
+let stopOmnichatReactionBridge: (() => void) | undefined
+let stopOmnichatCallActiveBridge: (() => void) | undefined
 let stopPassvaultLockedBridge: (() => void) | undefined
 // Id du rebond du dock macOS declenche par un appel entrant (annule a la fin).
 let incomingCallBounceId: number | null = null
@@ -88,8 +90,10 @@ const isAppFrame = (frame: Electron.WebFrameMain | null | undefined): boolean =>
   )
 }
 
-const setupMediaPermissions = (): void => {
-  session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => {
+// Regles de permission communes a une session : micro/camera/capture restent reserves au
+// renderer de l'app (isAppWebContents), tout le reste -- dont 'notifications' -- est accorde.
+const applySessionPermissionHandlers = (ses: Electron.Session): void => {
+  ses.setPermissionRequestHandler((contents, permission, callback) => {
     if (CAPTURE_PERMISSIONS.has(permission)) {
       callback(isAppWebContents(contents))
       return
@@ -97,11 +101,27 @@ const setupMediaPermissions = (): void => {
     callback(true)
   })
 
-  session.defaultSession.setPermissionCheckHandler((contents, permission) => {
+  ses.setPermissionCheckHandler((contents, permission) => {
     if (CAPTURE_PERMISSIONS.has(permission)) {
       return isAppWebContents(contents)
     }
     return true
+  })
+}
+
+const setupMediaPermissions = (): void => {
+  applySessionPermissionHandlers(session.defaultSession)
+
+  // Les <webview> (pages epinglees Slack/Teams/Outlook, onglets OmniBrowser) tournent sur des
+  // sessions de partition isolees (persist:webpage-<id>...) qui n'heritent PAS des handlers de
+  // la defaultSession. Sans handler explicite, l'octroi de 'notifications' est incertain et la
+  // page ne peut pas emettre ses notifications web (donc rien a capter pour le pont). On rejoue
+  // donc les memes regles sur chaque session creee ensuite -- le micro/camera y restent refuses
+  // car isAppWebContents est faux pour ces guests.
+  app.on('session-created', (ses) => {
+    if (ses !== session.defaultSession) {
+      applySessionPermissionHandlers(ses)
+    }
   })
 
   // Partage d'ecran : seul le renderer de l'app peut capturer. Sur macOS recent,
@@ -394,6 +414,12 @@ app.whenReady().then(() => {
       incomingCallBounceId = null
     }
   })
+  stopOmnichatReactionBridge = eventBus.on('omnichat:reaction', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_REACTION, payload)
+  })
+  stopOmnichatCallActiveBridge = eventBus.on('omnichat:call-active', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_CALL_ACTIVE, payload)
+  })
   // Coffre omniPass verrouille (manuel ou auto-lock) -> le renderer repasse en mode verrouille.
   stopPassvaultLockedBridge = eventBus.on('passvault:locked', (payload) => {
     mainWindow?.webContents.send(PRELOAD_EVENTS.PASSVAULT_LOCKED, payload)
@@ -430,6 +456,8 @@ app.on('before-quit', () => {
   stopOmnichatReceiptBridge?.()
   stopOmnichatCallRingBridge?.()
   stopOmnichatCallStateBridge?.()
+  stopOmnichatReactionBridge?.()
+  stopOmnichatCallActiveBridge?.()
   stopPassvaultLockedBridge?.()
   signalingClient.stop()
   syncEngine.stop()

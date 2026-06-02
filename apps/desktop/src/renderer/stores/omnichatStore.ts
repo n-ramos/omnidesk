@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { watch } from 'vue'
+import { errorMessage } from '@shared/errors'
 import { useAppStore } from '@renderer/stores/appStore'
 import { useOmnichat } from '@renderer/composables/useOmnichat'
 import type {
@@ -18,6 +20,9 @@ let stopTyping: (() => void) | undefined
 let stopReceipt: (() => void) | undefined
 let stopCallRing: (() => void) | undefined
 let stopCallState: (() => void) | undefined
+let stopReaction: (() => void) | undefined
+let stopCallActive: (() => void) | undefined
+let stopActiveWatch: (() => void) | undefined
 
 // Timers (module-level) : expiration d'un indicateur "ecrit..." entrant, et
 // arret differe de notre propre saisie (debounce).
@@ -59,6 +64,10 @@ interface OmnichatStoreState {
   readByConversation: Record<string, boolean>
   // Appel entrant en attente de reponse (cote destinataire), sinon null.
   incomingCall: OmnichatCallRingEvent | null
+  // Appels de groupe actifs (notification passive -> bouton Rejoindre), keyes par
+  // conversationId local. Et l'appel de groupe que J'hote (pour le retirer au raccrochage).
+  activeGroupCalls: Record<string, { callId: string; room: string; fromPseudo?: string }>
+  hostedGroupCall: { conversationId: string; callId: string; room: string } | null
   initialized: boolean
   working: boolean
   error?: string
@@ -76,6 +85,8 @@ export const useOmnichatStore = defineStore('omnichat', {
     typingByConversation: {},
     readByConversation: {},
     incomingCall: null,
+    activeGroupCalls: {},
+    hostedGroupCall: null,
     initialized: false,
     working: false,
   }),
@@ -139,6 +150,9 @@ export const useOmnichatStore = defineStore('omnichat', {
       stopReceipt?.()
       stopCallRing?.()
       stopCallState?.()
+      stopReaction?.()
+      stopCallActive?.()
+      stopActiveWatch?.()
       stopConnection = a.events.onOmnichatConnection((event) => {
         this.connected = event.connected
         if (event.identity) {
@@ -190,24 +204,83 @@ export const useOmnichatStore = defineStore('omnichat', {
           }
         }
       })
+      stopReaction = a.events.onOmnichatReaction((event) => {
+        // Reaction arrivee : si la conversation est ouverte, on la recharge pour
+        // rafraichir les pastilles de reactions.
+        const appStore = useAppStore()
+        if (appStore.selectedConversation?.id === event.conversationId) {
+          void appStore.selectConversation(event.conversationId)
+        }
+      })
+      stopCallActive = a.events.onOmnichatCallActive((event) => {
+        if (event.active) {
+          this.activeGroupCalls = {
+            ...this.activeGroupCalls,
+            [event.conversationId]: {
+              callId: event.callId,
+              room: event.room,
+              fromPseudo: event.fromPseudo,
+            },
+          }
+        } else {
+          const next = { ...this.activeGroupCalls }
+          delete next[event.conversationId]
+          this.activeGroupCalls = next
+        }
+      })
+      // Quand l'appel que J'hote se termine (state.active repasse a false), on retire
+      // l'appel de groupe (le bouton Rejoindre disparait chez les membres).
+      stopActiveWatch = watch(
+        () => useOmnichat().state.active,
+        (active) => {
+          if (!active && this.hostedGroupCall) {
+            const { conversationId, callId, room } = this.hostedGroupCall
+            this.hostedGroupCall = null
+            void api()?.omnichat?.setGroupCall({ conversationId, callId, room, active: false })
+          }
+        },
+      )
     },
 
     // --- Appels ad-hoc ---------------------------------------------------
     // Demarre un appel pour une conversation : DM -> on invite le pair ; groupe -> on
     // demarre seul (on ajoute ensuite via le bouton + de l'appel, jamais tout le groupe).
-    async startCallForConversation(conv: { id: string; kind?: string; title: string }): Promise<void> {
+    async startCallForConversation(conv: {
+      id: string
+      kind?: string
+      title: string
+    }): Promise<void> {
       const a = api()
       if (!a?.omnichat) {
         return
       }
+      const isGroup = conv.kind === 'group'
       let inviteUserIds: string[] = []
-      if (conv.kind !== 'group') {
+      if (!isGroup) {
         const peer = await a.omnichat.dmPeer(conv.id)
         if (peer.userId) {
           inviteUserIds = [peer.userId]
         }
       }
-      await useOmnichat().startCall({ media: 'audio', inviteUserIds, title: conv.title })
+      const call = useOmnichat()
+      await call.startCall({ media: 'audio', inviteUserIds, title: conv.title })
+      // Groupe : on declare l'appel "actif pour le groupe" (les membres voient Rejoindre).
+      const callId = call.state.callId
+      const room = call.state.room
+      if (isGroup && callId && room) {
+        this.hostedGroupCall = { conversationId: conv.id, callId, room }
+        void a.omnichat.setGroupCall({ conversationId: conv.id, callId, room, active: true })
+      }
+    },
+
+    // Rejoint l'appel actif d'un groupe (bouton "Rejoindre l'appel").
+    async joinGroupCall(conversationId: string): Promise<void> {
+      const active = this.activeGroupCalls[conversationId]
+      if (!active) {
+        return
+      }
+      const title = this.conversations.find((conv) => conv.id === conversationId)?.title ?? 'Appel'
+      await useOmnichat().acceptCall({ callId: active.callId, room: active.room, title })
     },
 
     async acceptIncomingCall(): Promise<void> {
@@ -231,7 +304,11 @@ export const useOmnichatStore = defineStore('omnichat', {
         return
       }
       this.incomingCall = null
-      await api()?.omnichat?.callDecline({ from: call.from, callId: call.callId, reason: 'declined' })
+      await api()?.omnichat?.callDecline({
+        from: call.from,
+        callId: call.callId,
+        reason: 'declined',
+      })
     },
 
     // Signale au main le groupe ouvert (presence a la demande de ses membres). null sinon.
@@ -288,8 +365,9 @@ export const useOmnichatStore = defineStore('omnichat', {
       if (open && open.id === conversationId) {
         const exists = open.messages.some(
           (m) =>
-            m.id === message.id
-            || (Boolean(message.externalMessageId) && m.externalMessageId === message.externalMessageId),
+            m.id === message.id ||
+            (Boolean(message.externalMessageId) &&
+              m.externalMessageId === message.externalMessageId),
         )
         if (!exists) {
           open.messages.push(message)
@@ -391,7 +469,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         await a.omnichat.addContact(pseudo, id)
         await this.loadContacts()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "Impossible d'ajouter le contact."
+        this.error = errorMessage(error, "Impossible d'ajouter le contact.")
         throw error
       } finally {
         this.working = false
@@ -407,7 +485,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         await a.omnichat.removeContact(id)
         await this.loadContacts()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de retirer le contact.'
+        this.error = errorMessage(error, 'Impossible de retirer le contact.')
       }
     },
 
@@ -424,7 +502,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         await this.refreshConversations()
         await useAppStore().selectConversation(conversationId)
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "Impossible d'ouvrir le message direct."
+        this.error = errorMessage(error, "Impossible d'ouvrir le message direct.")
       } finally {
         this.working = false
       }
@@ -452,7 +530,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         await this.refreshConversations()
         await useAppStore().selectConversation(conversationId)
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de creer le groupe.'
+        this.error = errorMessage(error, 'Impossible de creer le groupe.')
         throw error
       } finally {
         this.working = false
@@ -475,7 +553,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         await a.omnichat.updateGroup(input)
         await this.handleGroupChange(input.conversationId)
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de mettre a jour le groupe.'
+        this.error = errorMessage(error, 'Impossible de mettre a jour le groupe.')
         throw error
       } finally {
         this.working = false
@@ -494,7 +572,7 @@ export const useOmnichatStore = defineStore('omnichat', {
       try {
         await a.omnichat.joinGroup(groupId)
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de rejoindre le groupe.'
+        this.error = errorMessage(error, 'Impossible de rejoindre le groupe.')
         throw error
       } finally {
         this.working = false
@@ -517,7 +595,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         }
         await this.refreshConversations()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de quitter le groupe.'
+        this.error = errorMessage(error, 'Impossible de quitter le groupe.')
         throw error
       } finally {
         this.working = false
@@ -556,7 +634,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         this.connected = state.connected
         await this.refreshConversations()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "Impossible d'enregistrer le pseudo."
+        this.error = errorMessage(error, "Impossible d'enregistrer le pseudo.")
       } finally {
         this.working = false
       }

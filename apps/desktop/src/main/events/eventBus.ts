@@ -1,12 +1,14 @@
 import { EventEmitter } from 'node:events'
 import type {
   LocalNotification,
+  OmnichatCallActiveEvent,
   OmnichatCallRingEvent,
   OmnichatCallStateEvent,
   OmnichatConnectionEvent,
   OmnichatGroupEvent,
   OmnichatMessageEvent,
   OmnichatPresenceEvent,
+  OmnichatReactionEvent,
   OmnichatReceiptEvent,
   OmnichatTypingEvent,
 } from '@shared/models'
@@ -24,6 +26,8 @@ interface AppEventMap {
   'omnichat:receipt': OmnichatReceiptEvent
   'omnichat:call-ring': OmnichatCallRingEvent
   'omnichat:call-state': OmnichatCallStateEvent
+  'omnichat:reaction': OmnichatReactionEvent
+  'omnichat:call-active': OmnichatCallActiveEvent
   // Coffre omniPass : la cle maitre a ete purgee de la memoire (verrouillage manuel ou auto).
   'passvault:locked': { reason: 'manual' | 'timeout' }
   'passvault:unlocked': Record<string, never>

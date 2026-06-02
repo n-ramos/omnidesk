@@ -274,4 +274,46 @@ export class OmnichatMessageService {
     }
     return null
   }
+
+  // Cible WS a partir d'un external_conversation_id (dm:a|b / group:gid) — utilise pour
+  // les reactions (le contexte ne fournit que l'external id, pas la conversation locale).
+  targetFromExternal(self: OmnichatSelfContext, externalConversationId: string): Target | null {
+    if (externalConversationId.startsWith('group:')) {
+      return { kind: 'group', groupId: externalConversationId.slice('group:'.length) }
+    }
+    if (externalConversationId.startsWith('dm:')) {
+      const pair = externalConversationId.slice('dm:'.length).split('|')
+      const peer = pair.find((email) => email.toLowerCase() !== self.userId.toLowerCase()) ?? pair[0]
+      return peer ? { kind: 'dm', userId: peer } : null
+    }
+    return null
+  }
+
+  // Conversation locale d'un groupe a partir de son groupId (pour le bouton Rejoindre).
+  localGroupConversationId(self: OmnichatSelfContext, groupId: string): UUID | null {
+    return (
+      this.conversations.findByExternal(self.accountId, groupExternalId(groupId))?.conversationId ?? null
+    )
+  }
+
+  // Applique une reaction entrante (reaction-in) sur le message local correspondant.
+  // null si le message n'est pas (encore) connu localement.
+  applyIncomingReaction(
+    self: OmnichatSelfContext,
+    from: string,
+    serverMsgId: string,
+    name: string,
+    op: 'add' | 'remove',
+  ): { conversationId: UUID } | null {
+    const found = this.messages.findIdByExternal(self.accountId, PROVIDER_ID, serverMsgId)
+    if (!found) {
+      return null
+    }
+    if (op === 'add') {
+      this.messages.addReaction(found.id, name, from, false)
+    } else {
+      this.messages.removeReaction(found.id, name, from)
+    }
+    return { conversationId: found.conversationId }
+  }
 }

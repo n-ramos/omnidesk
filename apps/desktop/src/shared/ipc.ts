@@ -98,6 +98,7 @@ export const IPC_CHANNELS = {
   OMNICHAT_START_RECORDING: 'omnichat:start-recording',
   OMNICHAT_STOP_RECORDING: 'omnichat:stop-recording',
   OMNICHAT_WATCH_GROUP: 'omnichat:watch-group',
+  OMNICHAT_SET_GROUP_CALL: 'omnichat:set-group-call',
   OMNICHAT_AVAILABILITY: 'omnichat:availability',
   OMNICHAT_GET_IDENTITY: 'omnichat:get-identity',
   OMNICHAT_SET_IDENTITY: 'omnichat:set-identity',
@@ -226,6 +227,8 @@ export const IPC_CHANNELS = {
   PASSVAULT_IMPORT: 'passvault:import',
   PASSVAULT_IMPORT_BROWSER: 'passvault:import-browser',
   PASSVAULT_FIND_FOR_ORIGIN: 'passvault:find-for-origin',
+  BACKUP_EXPORT: 'backup:export',
+  BACKUP_IMPORT: 'backup:import',
 } as const
 
 export const PRELOAD_EVENTS = {
@@ -243,6 +246,8 @@ export const PRELOAD_EVENTS = {
   OMNICHAT_RECEIPT_IN: 'omnichat:receipt-in',
   OMNICHAT_CALL_RING: 'omnichat:call-ring',
   OMNICHAT_CALL_STATE: 'omnichat:call-state',
+  OMNICHAT_REACTION: 'omnichat:reaction',
+  OMNICHAT_CALL_ACTIVE: 'omnichat:call-active',
   APP_NAV_SHORTCUT: 'app:nav-shortcut',
   PASSVAULT_LOCKED: 'passvault:locked',
 } as const
@@ -252,7 +257,6 @@ export const PRELOAD_EVENTS = {
 export type { OmniBrowserShortcutAction, AppNavShortcutAction } from './shortcuts'
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
-export type PreloadEvent = (typeof PRELOAD_EVENTS)[keyof typeof PRELOAD_EVENTS]
 
 export interface IpcRequestMap {
   [IPC_CHANNELS.APP_GET_BOOTSTRAP]: undefined
@@ -290,7 +294,10 @@ export interface IpcRequestMap {
   [IPC_CHANNELS.CONVERSATIONS_GET]: { conversationId: string }
   [IPC_CHANNELS.CONVERSATIONS_FOCUS]: { conversationId: string | null }
   [IPC_CHANNELS.CONVERSATIONS_MARK_READ]: { conversationId: string }
-  [IPC_CHANNELS.CONVERSATIONS_LOOKUP_EXTERNAL]: { accountId: string; externalConversationId: string }
+  [IPC_CHANNELS.CONVERSATIONS_LOOKUP_EXTERNAL]: {
+    accountId: string
+    externalConversationId: string
+  }
   [IPC_CHANNELS.CONVERSATIONS_OPEN_DIRECT]: { accountId: string; contactExternalId: string }
   [IPC_CHANNELS.CONTACTS_LIST]: { accountId: string }
   [IPC_CHANNELS.MESSAGES_UPDATE_STATE]: UpdateMessageStateInput
@@ -301,6 +308,12 @@ export interface IpcRequestMap {
   [IPC_CHANNELS.OMNICHAT_START_RECORDING]: { callId: string; room: string }
   [IPC_CHANNELS.OMNICHAT_STOP_RECORDING]: { egressId: string }
   [IPC_CHANNELS.OMNICHAT_WATCH_GROUP]: { conversationId: string | null }
+  [IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL]: {
+    conversationId: string
+    callId: string
+    room: string
+    active: boolean
+  }
   [IPC_CHANNELS.OMNICHAT_AVAILABILITY]: undefined
   [IPC_CHANNELS.OMNICHAT_GET_IDENTITY]: undefined
   [IPC_CHANNELS.OMNICHAT_SET_IDENTITY]: { pseudo: string }
@@ -501,6 +514,8 @@ export interface IpcRequestMap {
   [IPC_CHANNELS.PASSVAULT_IMPORT]: { password: string }
   [IPC_CHANNELS.PASSVAULT_IMPORT_BROWSER]: undefined
   [IPC_CHANNELS.PASSVAULT_FIND_FOR_ORIGIN]: { origin: string }
+  [IPC_CHANNELS.BACKUP_EXPORT]: { password: string }
+  [IPC_CHANNELS.BACKUP_IMPORT]: { password: string }
 }
 
 export interface IpcResponseMap {
@@ -543,6 +558,7 @@ export interface IpcResponseMap {
   [IPC_CHANNELS.OMNICHAT_START_RECORDING]: { egressId: string }
   [IPC_CHANNELS.OMNICHAT_STOP_RECORDING]: { ok: true }
   [IPC_CHANNELS.OMNICHAT_WATCH_GROUP]: { ok: true }
+  [IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL]: { ok: true }
   [IPC_CHANNELS.OMNICHAT_AVAILABILITY]: { available: boolean }
   [IPC_CHANNELS.OMNICHAT_GET_IDENTITY]: OmnichatIdentityState
   [IPC_CHANNELS.OMNICHAT_SET_IDENTITY]: OmnichatIdentityState
@@ -675,6 +691,8 @@ export interface IpcResponseMap {
   [IPC_CHANNELS.PASSVAULT_IMPORT]: { folders: number; entries: number } | null
   [IPC_CHANNELS.PASSVAULT_IMPORT_BROWSER]: { imported: number }
   [IPC_CHANNELS.PASSVAULT_FIND_FOR_ORIGIN]: { username: string; password: string } | null
+  [IPC_CHANNELS.BACKUP_EXPORT]: { saved: boolean }
+  [IPC_CHANNELS.BACKUP_IMPORT]: { restored: boolean }
 }
 
 // Evenement pousse main -> renderer quand le coffre est verrouille (manuel ou auto-lock).

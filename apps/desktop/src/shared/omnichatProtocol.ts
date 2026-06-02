@@ -84,6 +84,14 @@ export const clientEnvelopeSchema = z.discriminatedUnion('t', [
     to: targetSchema,
     state: z.enum(['start', 'stop']),
   }),
+  // Reaction (emoji) sur un message : ajout/retrait, relaye au pair/groupe (non persiste serveur).
+  z.object({
+    t: z.literal('reaction'),
+    to: targetSchema,
+    serverMsgId: z.string().min(1).max(200),
+    name: z.string().min(1).max(100),
+    op: z.enum(['add', 'remove']),
+  }),
   z.object({
     t: z.literal('group-create'),
     groupId: z.string().min(1).max(LIMITS.groupId),
@@ -113,6 +121,15 @@ export const clientEnvelopeSchema = z.discriminatedUnion('t', [
     reason: callDeclineReasonSchema.optional(),
   }),
   z.object({ t: z.literal('call-cancel'), to: targetSchema, callId: z.string().min(1).max(200) }),
+  // Declare (active=true) / retire (active=false) un appel ad-hoc comme "appel du groupe" :
+  // les membres recoivent une notification passive 'call-active' (bouton Rejoindre, pas de ring).
+  z.object({
+    t: z.literal('call-group'),
+    groupId: z.string().min(1).max(LIMITS.groupId),
+    callId: z.string().min(1).max(200),
+    room: z.string().min(1).max(200),
+    active: z.boolean(),
+  }),
   // Abonnement presence (modele contacts) : declare les identifiants des contacts
   // dont on veut suivre l'etat en ligne. Le serveur ne pousse la presence QUE pour
   // ces identifiants (plus d'annuaire global). Renvoye a chaque (re)connexion et a
@@ -188,6 +205,14 @@ export const serverEnvelopeSchema = z.discriminatedUnion('t', [
     state: z.enum(['start', 'stop']),
   }),
   z.object({
+    t: z.literal('reaction-in'),
+    from: z.string(),
+    to: targetSchema,
+    serverMsgId: z.string(),
+    name: z.string(),
+    op: z.enum(['add', 'remove']),
+  }),
+  z.object({
     t: z.literal('group-invite'),
     from: z.string(),
     groupId: z.string(),
@@ -221,6 +246,15 @@ export const serverEnvelopeSchema = z.discriminatedUnion('t', [
     reason: callDeclineReasonSchema.optional(),
   }),
   z.object({ t: z.literal('call-canceled'), from: z.string(), callId: z.string() }),
+  z.object({
+    t: z.literal('call-active'),
+    groupId: z.string(),
+    callId: z.string(),
+    room: z.string(),
+    from: z.string(),
+    fromPseudo: z.string().optional(),
+    active: z.boolean(),
+  }),
   z.object({
     t: z.literal('history-page'),
     to: targetSchema,
