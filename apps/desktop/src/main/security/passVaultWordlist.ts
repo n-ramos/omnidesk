@@ -1,0 +1,43 @@
+// Wordlist embarquee pour la generation de phrases secretes (passphrase, facon diceware).
+// Mots courts, courants et faciles a taper. La liste est DEDUPLIQUEE a l'export : l'entropie reelle
+// par mot vaut log2(PASSPHRASE_WORDLIST.length). ZERO dependance (coherent avec le reste du coffre).
+const RAW_WORDS = [
+  'able', 'acid', 'acorn', 'actor', 'agile', 'alarm', 'album', 'alert', 'algae', 'alley',
+  'almond', 'amber', 'anchor', 'angle', 'ankle', 'apple', 'april', 'apron', 'arena', 'armor',
+  'arrow', 'attic', 'autumn', 'awake', 'axis', 'bacon', 'badge', 'bagel', 'baker', 'balloon',
+  'bamboo', 'banana', 'banjo', 'barrel', 'basil', 'basket', 'batch', 'beach', 'beacon', 'beans',
+  'beaver', 'beetle', 'bench', 'berry', 'bird', 'bishop', 'bison', 'blade', 'blanket', 'blaze',
+  'blink', 'block', 'bloom', 'blossom', 'board', 'boat', 'bonus', 'bottle', 'boulder', 'brave',
+  'bread', 'breeze', 'brick', 'bridge', 'broom', 'brush', 'bubble', 'bucket', 'buffalo', 'bunny',
+  'butter', 'button', 'cable', 'cactus', 'camel', 'candle', 'canoe', 'canvas', 'canyon', 'carbon',
+  'cargo', 'carpet', 'carrot', 'castle', 'cedar', 'cellar', 'cherry', 'chess', 'chief', 'chili',
+  'cider', 'circle', 'clamp', 'clay', 'cliff', 'cloak', 'clock', 'clover', 'cobra', 'cocoa',
+  'comet', 'compass', 'copper', 'coral', 'cotton', 'cougar', 'crane', 'crater', 'crayon', 'cricket',
+  'crown', 'crystal', 'cube', 'dagger', 'daisy', 'dawn', 'deer', 'delta', 'denim', 'desert',
+  'diamond', 'diary', 'dolphin', 'domino', 'donut', 'dragon', 'dream', 'drift', 'drum', 'dune',
+  'eagle', 'ember', 'emerald', 'engine', 'estate', 'fable', 'falcon', 'feather', 'fennel', 'fern',
+  'ferry', 'fiber', 'fiddle', 'finch', 'flame', 'flask', 'fleet', 'flint', 'flower', 'flute',
+  'forest', 'fossil', 'fountain', 'fox', 'frost', 'galaxy', 'garden', 'garlic', 'gazelle', 'ginger',
+  'glacier', 'glade', 'globe', 'gold', 'granite', 'grape', 'grass', 'gravel', 'guitar', 'hammer',
+  'hamster', 'harbor', 'harvest', 'hazel', 'heron', 'hickory', 'honey', 'hornet', 'horse', 'ivory',
+  'jacket', 'jaguar', 'jasmine', 'jelly', 'jewel', 'jungle', 'kettle', 'kitten', 'koala', 'ladder',
+  'lagoon', 'lantern', 'lava', 'leaf', 'lemon', 'lentil', 'lilac', 'lily', 'lime', 'linen',
+  'lion', 'lizard', 'llama', 'lobster', 'locket', 'lotus', 'lunar', 'lynx', 'magnet', 'mango',
+  'maple', 'marble', 'meadow', 'medal', 'melon', 'meteor', 'mint', 'mirror', 'mitten', 'monkey',
+  'moss', 'mountain', 'muffin', 'mushroom', 'nectar', 'needle', 'nest', 'nickel', 'noble', 'nutmeg',
+  'oasis', 'ocean', 'olive', 'onion', 'orange', 'orbit', 'orchid', 'otter', 'owl', 'oyster',
+  'paddle', 'palace', 'panda', 'pansy', 'parrot', 'pasta', 'peach', 'peanut', 'pearl', 'pebble',
+  'pelican', 'pepper', 'phoenix', 'piano', 'pickle', 'pigeon', 'pilot', 'pine', 'pirate', 'pistol',
+  'planet', 'plum', 'pocket', 'pollen', 'pony', 'poppy', 'potato', 'prairie', 'pretzel', 'puffin',
+  'pumpkin', 'puzzle', 'quartz', 'quilt', 'rabbit', 'raccoon', 'radar', 'radish', 'rainbow', 'raven',
+  'reef', 'ribbon', 'river', 'robin', 'rocket', 'rose', 'ruby', 'rudder', 'saddle', 'salmon',
+  'sapphire', 'satin', 'scarf', 'seal', 'shadow', 'shark', 'shell', 'shrub', 'silver', 'sketch',
+  'sled', 'sloth', 'snail', 'sparrow', 'spruce', 'squid', 'stable', 'stag', 'storm', 'stream',
+  'sugar', 'summit', 'sunset', 'swan', 'sword', 'table', 'tango', 'temple', 'thunder', 'tiger',
+  'timber', 'toast', 'tomato', 'topaz', 'torch', 'tortoise', 'tower', 'trail', 'tulip', 'tundra',
+  'turtle', 'umbra', 'unicorn', 'valley', 'vanilla', 'velvet', 'vine', 'violet', 'volcano', 'voyage',
+  'walnut', 'walrus', 'wagon', 'wasp', 'water', 'weasel', 'whale', 'wheat', 'willow', 'window',
+  'winter', 'wizard', 'wolf', 'wombat', 'yacht', 'yarn', 'zebra', 'zephyr', 'zinc', 'zodiac',
+]
+
+export const PASSPHRASE_WORDLIST: readonly string[] = Array.from(new Set(RAW_WORDS)).sort()

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      connect-src autorise https:/wss: car le media LiveKit (omnichat) tourne dans le
+      renderer et se connecte a un hote distant variable (URL minte par le proxy au
+      runtime ; LiveKit Cloud repartit le media sur plusieurs sous-domaines) : impossible
+      a scoper sur un hote precis. Le proxy et la signalisation, eux, vivent dans le main
+      et echappent a cette CSP. Ne pas restreindre connect-src sans casser les appels
+      (erreur cote renderer : "could not establish signal connection: Failed to fetch").
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:* https: wss:;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Omnidesk</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

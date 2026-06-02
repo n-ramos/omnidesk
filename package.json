@@ -1,0 +1,17 @@
+{
+  "name": "omnidesk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first unified desktop inbox for email and workplace messaging.",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --filter @omnidesk/desktop dev",
+    "build": "pnpm --filter @omnidesk/desktop build",
+    "lint": "pnpm --filter @omnidesk/desktop lint",
+    "format": "pnpm --filter @omnidesk/desktop format",
+    "typecheck": "pnpm --filter @omnidesk/desktop typecheck"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3"
+  }
+}

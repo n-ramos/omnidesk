@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Canaux RGB de la couleur d'accent (defaut menthe #8ee6bf). Reecrite a chaud
+     via documentElement.style (voir utils/accentColor.ts). Format canaux separes
+     par des espaces pour rester compatible avec rgb(var(--accent-mint) / alpha). */
+  --accent-mint: 142 230 191;
+  /* Degrade de fond (palette ink), canaux RGB. Reecrit a chaud par utils/baseColor.ts
+     (derive d'une couleur de base choisie). Defauts = degrade d'origine. */
+  --ink-950: 9 10 13;
+  --ink-925: 13 15 20;
+  --ink-900: 18 21 27;
+  --ink-850: 23 27 34;
+  --ink-800: 30 35 44;
+  --ink-750: 37 43 53;
+  --ink-700: 48 55 68;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgb(var(--accent-mint) / 0.08), transparent 32%),
+    linear-gradient(225deg, rgba(139, 188, 255, 0.07), transparent 28%),
+    rgb(var(--ink-950));
+  color: #f5f7fb;
+}
+
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+::selection {
+  background: rgb(var(--accent-mint) / 0.24);
+  color: #ffffff;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+* {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+  background-clip: content-box;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.34);
+  background-clip: content-box;
+}

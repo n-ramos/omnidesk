@@ -1,0 +1,453 @@
+import { app, BrowserWindow, desktopCapturer, Menu, powerMonitor, protocol, screen, session, shell } from 'electron'
+import { join } from 'node:path'
+import { electronApp, is } from '@electron-toolkit/utils'
+import { appConfig } from '@main/config/env'
+import { installAppMenu } from '@main/appMenu'
+import { databaseClient } from '@main/database/client'
+import { eventBus } from '@main/events/eventBus'
+import { registerIpcHandlers } from '@main/ipc/registerIpcHandlers'
+import { logger } from '@main/logger'
+import { NativeNotificationService } from '@main/notifications/nativeNotifications'
+import { signalingClient } from '@main/omnichat/signalingClient'
+import { ReminderScheduler } from '@main/reminders/reminderScheduler'
+import { PassVaultService } from '@main/omnipass/passVaultService'
+import { SyncEngine } from '@main/sync/syncEngine'
+import { warnIfDiskUnencrypted } from '@main/security/diskEncryption'
+import { autoUpdater } from 'electron-updater'
+import { PRELOAD_EVENTS } from '@shared/ipc'
+
+let mainWindow: BrowserWindow | null = null
+const syncEngine = new SyncEngine()
+const nativeNotifications = new NativeNotificationService()
+let reminderScheduler: ReminderScheduler | undefined
+let passVaultService: PassVaultService | undefined
+let stopNativeNotificationsBridge: (() => void) | undefined
+let stopSyncBridge: (() => void) | undefined
+let stopReminderBridge: (() => void) | undefined
+let stopOmnichatConnectionBridge: (() => void) | undefined
+let stopOmnichatMessageBridge: (() => void) | undefined
+let stopOmnichatPresenceBridge: (() => void) | undefined
+let stopOmnichatGroupBridge: (() => void) | undefined
+let stopOmnichatTypingBridge: (() => void) | undefined
+let stopOmnichatReceiptBridge: (() => void) | undefined
+let stopOmnichatCallRingBridge: (() => void) | undefined
+let stopOmnichatCallStateBridge: (() => void) | undefined
+let stopPassvaultLockedBridge: (() => void) | undefined
+// Id du rebond du dock macOS declenche par un appel entrant (annule a la fin).
+let incomingCallBounceId: number | null = null
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: appConfig.OMNIDESK_APP_PROTOCOL,
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: false,
+    },
+  },
+])
+
+let cachedWebviewUserAgent: string | null = null
+
+// L'UA par defaut d'Electron contient les jetons "<AppName>/x.y.z" et "Electron/x.y.z".
+// Plusieurs services (Deezer notamment) lisent navigator.userAgent, ne reconnaissent pas
+// ces jetons et bloquent la page avec un message "navigateur trop ancien". On les retire
+// pour que les pages embarquees voient une UA Chrome standard. La version Chrome reelle est
+// conservee, donc l'UA reste coherente avec le moteur embarque.
+const getWebviewUserAgent = (): string => {
+  if (cachedWebviewUserAgent === null) {
+    cachedWebviewUserAgent = app.userAgentFallback
+      .replace(/(\(KHTML, like Gecko\)) [^ ]+\/[^ ]+ (Chrome\/)/, '$1 $2')
+      .replace(/ Electron\/[^ ]+/, '')
+      .replace(/ {2,}/g, ' ')
+      .trim()
+  }
+  return cachedWebviewUserAgent
+}
+
+// Permissions media : micro, camera et capture d'ecran ne sont accordes QU'AU
+// renderer de l'app (l'omnichat). Les <webview> embarquent des sites tiers
+// (OmniBrowser, pages epinglees) : on ne leur ouvre jamais les peripheriques.
+// Les autres permissions gardent un comportement permissif (parite avec l'absence
+// de handler precedente, sans toucher au media).
+const CAPTURE_PERMISSIONS = new Set(['media', 'audioCapture', 'videoCapture', 'display-capture'])
+
+const isAppWebContents = (contents: Electron.WebContents | null | undefined): boolean =>
+  Boolean(contents && mainWindow && contents.id === mainWindow.webContents.id)
+
+const isAppFrame = (frame: Electron.WebFrameMain | null | undefined): boolean => {
+  const main = mainWindow?.webContents.mainFrame
+  return Boolean(
+    frame && main && frame.processId === main.processId && frame.routingId === main.routingId,
+  )
+}
+
+const setupMediaPermissions = (): void => {
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => {
+    if (CAPTURE_PERMISSIONS.has(permission)) {
+      callback(isAppWebContents(contents))
+      return
+    }
+    callback(true)
+  })
+
+  session.defaultSession.setPermissionCheckHandler((contents, permission) => {
+    if (CAPTURE_PERMISSIONS.has(permission)) {
+      return isAppWebContents(contents)
+    }
+    return true
+  })
+
+  // Partage d'ecran : seul le renderer de l'app peut capturer. Sur macOS recent,
+  // useSystemPicker affiche le selecteur natif ; sinon on retombe sur la premiere
+  // source via desktopCapturer. Repondre {} revient a refuser la capture.
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      if (!isAppFrame(request.frame)) {
+        callback({})
+        return
+      }
+      desktopCapturer
+        .getSources({ types: ['screen', 'window'] })
+        .then((sources) => {
+          const primary = sources[0]
+          callback(primary ? { video: primary } : {})
+        })
+        .catch(() => callback({}))
+    },
+    { useSystemPicker: true },
+  )
+}
+
+const createMainWindow = (): void => {
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
+  const isMac = process.platform === 'darwin'
+  const initialWidth = isMac
+    ? screenWidth
+    : Math.min(screenWidth, Math.max(1080, Math.floor(screenWidth * 0.94)))
+  const initialHeight = isMac
+    ? screenHeight
+    : Math.min(screenHeight, Math.max(780, Math.floor(screenHeight * 0.95)))
+
+  mainWindow = new BrowserWindow({
+    center: true,
+    width: initialWidth,
+    height: initialHeight,
+    minWidth: 820,
+    minHeight: 640,
+    useContentSize: true,
+    backgroundColor: '#08090b',
+    frame: isMac,
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    trafficLightPosition: isMac ? { x: 14, y: 14 } : undefined,
+    title: 'Omnidesk',
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: true,
+    },
+  })
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show()
+  })
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (is.dev && url.startsWith('http://localhost')) {
+      return
+    }
+
+    event.preventDefault()
+    void shell.openExternal(url)
+  })
+
+  mainWindow.webContents.on('will-attach-webview', (_event, webPreferences, params) => {
+    delete webPreferences.preload
+    Reflect.deleteProperty(webPreferences as Record<string, unknown>, 'preloadURL')
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    // La webview hote des DevTools n'affiche que l'UI DevTools (pas de contenu web) :
+    // le sandbox y empeche le rendu du frontend, on le relache uniquement pour elle.
+    webPreferences.sandbox = params.partition !== 'omnibrowser-devtools'
+    webPreferences.webSecurity = true
+    webPreferences.allowRunningInsecureContent = false
+
+    // Couvre la toute premiere requete de navigation avec une UA Chrome propre.
+    ;(params as Record<string, string>).useragent = getWebviewUserAgent()
+
+    if (typeof params.src === 'string') {
+      try {
+        const target = new URL(params.src)
+        if (target.protocol !== 'https:' && target.protocol !== 'http:') {
+          params.src = 'about:blank'
+        }
+      } catch {
+        params.src = 'about:blank'
+      }
+    }
+  })
+
+  mainWindow.webContents.on('did-attach-webview', (_event, webContents) => {
+    // Garantit que navigator.userAgent est propre avant l'execution du JS de la page,
+    // y compris si l'attribut useragent n'a pas ete pris en compte au moment de l'attache.
+    webContents.setUserAgent(getWebviewUserAgent())
+
+    webContents.setWindowOpenHandler(({ url }) => {
+      try {
+        const target = new URL(url)
+        if (target.protocol === 'https:' || target.protocol === 'http:') {
+          // On delegue au renderer : il sait si la source est un onglet OmniBrowser
+          // (=> nouvel onglet) ou une page web epinglee (=> chargement en place).
+          mainWindow?.webContents.send(PRELOAD_EVENTS.OMNIBROWSER_OPEN_TAB, {
+            sourceWebContentsId: webContents.id,
+            url,
+          })
+        }
+      } catch {
+        // URL invalide, on refuse silencieusement.
+      }
+      return { action: 'deny' }
+    })
+
+    // Menu contextuel de la PAGE (webContents du guest) : les DevTools ouvertes ici
+    // inspectent la page web Chromium, jamais l'app Electron hote.
+    webContents.on('context-menu', (_event, params) => {
+      const template: Electron.MenuItemConstructorOptions[] = []
+
+      if (params.linkURL) {
+        template.push({
+          label: 'Ouvrir le lien dans un nouvel onglet',
+          click: () => {
+            mainWindow?.webContents.send(PRELOAD_EVENTS.OMNIBROWSER_OPEN_TAB, {
+              sourceWebContentsId: webContents.id,
+              url: params.linkURL,
+            })
+          },
+        })
+        template.push({ type: 'separator' })
+      }
+
+      if (params.isEditable) {
+        template.push({ label: 'Couper', enabled: params.editFlags.canCut, click: () => webContents.cut() })
+        template.push({ label: 'Copier', enabled: params.editFlags.canCopy, click: () => webContents.copy() })
+        template.push({ label: 'Coller', enabled: params.editFlags.canPaste, click: () => webContents.paste() })
+        template.push({ type: 'separator' })
+      } else if (params.selectionText) {
+        template.push({ label: 'Copier', click: () => webContents.copy() })
+        template.push({ type: 'separator' })
+      }
+
+      template.push({
+        label: 'Précédent',
+        enabled: webContents.navigationHistory.canGoBack(),
+        click: () => webContents.navigationHistory.goBack(),
+      })
+      template.push({
+        label: 'Suivant',
+        enabled: webContents.navigationHistory.canGoForward(),
+        click: () => webContents.navigationHistory.goForward(),
+      })
+      template.push({ label: 'Recharger', click: () => webContents.reload() })
+      template.push({ type: 'separator' })
+      template.push({
+        label: "Inspecter l'élément",
+        click: () =>
+          mainWindow?.webContents.send(PRELOAD_EVENTS.OMNIBROWSER_INSPECT, {
+            sourceWebContentsId: webContents.id,
+            x: params.x,
+            y: params.y,
+          }),
+      })
+
+      Menu.buildFromTemplate(template).popup()
+    })
+  })
+
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+}
+
+const initAutoUpdater = (): void => {
+  // Les mises a jour ne fonctionnent que sur une app empaquetee et signee :
+  // electron-updater verifie la signature du paquet telecharge avant de l'installer.
+  // En developpement, checkForUpdates leverait une erreur (pas de feed) : on sort tot.
+  if (!app.isPackaged) {
+    return
+  }
+
+  autoUpdater.logger = logger
+  autoUpdater.on('error', (error) => {
+    logger.error('Auto-update check failed', error)
+  })
+
+  // Telecharge la MAJ en arriere-plan et notifie l'utilisateur quand elle est prete.
+  void autoUpdater.checkForUpdatesAndNotify()
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+})
+
+app.on('open-url', (event) => {
+  event.preventDefault()
+})
+
+app.whenReady().then(() => {
+  electronApp.setAppUserModelId('app.omnidesk.desktop')
+  app.setAsDefaultProtocolClient(appConfig.OMNIDESK_APP_PROTOCOL)
+
+  // Menu applicatif personnalise : les raccourcis navigateur (Cmd+R, Cmd+T, Cmd+L...)
+  // sont routes vers la page/onglet actif, et la navigation entre apps (Cmd/Ctrl+1..9)
+  // vers le renderer, au lieu de recharger l'app Electron.
+  installAppMenu({
+    browser: (action) => {
+      mainWindow?.webContents.send(PRELOAD_EVENTS.OMNIBROWSER_SHORTCUT, action)
+    },
+    nav: (action) => {
+      mainWindow?.webContents.send(PRELOAD_EVENTS.APP_NAV_SHORTCUT, action)
+    },
+  })
+
+  const db = databaseClient.open()
+  reminderScheduler = new ReminderScheduler(db)
+  passVaultService = new PassVaultService(db)
+  registerIpcHandlers(syncEngine, reminderScheduler, passVaultService)
+  syncEngine.start()
+  reminderScheduler.start()
+  stopNativeNotificationsBridge = eventBus.on('notification:created', (notification) => {
+    // Banniere native (silencieuse) + on previent le renderer pour qu'il joue le son
+    // de notification (PJ3). Les rappels (Elodie) ne passent PAS par ici : ils ont
+    // leur propre chirp via reminder:fired.
+    nativeNotifications.show(notification)
+    mainWindow?.webContents.send(PRELOAD_EVENTS.NOTIFICATION_CREATED, notification)
+  })
+  stopSyncBridge = eventBus.on('sync:completed', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.SYNC_UPDATED, payload)
+  })
+  stopReminderBridge = eventBus.on('reminder:fired', (notification) => {
+    // Rappel (Elodie) : bulle mascotte cote renderer + banniere native silencieuse.
+    // Le son est le chirp d'Elodie (pas PJ3) -> on ne forwarde pas NOTIFICATION_CREATED.
+    mainWindow?.webContents.send(PRELOAD_EVENTS.REMINDER_FIRED, notification)
+    nativeNotifications.show(notification)
+  })
+  // Pont signalisation omnichat -> renderer (meme schema que la synchro).
+  stopOmnichatConnectionBridge = eventBus.on('omnichat:connection', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_CONNECTION, payload)
+  })
+  stopOmnichatMessageBridge = eventBus.on('omnichat:message', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_MESSAGE, payload)
+  })
+  stopOmnichatPresenceBridge = eventBus.on('omnichat:presence', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_PRESENCE, payload)
+  })
+  stopOmnichatGroupBridge = eventBus.on('omnichat:group', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_GROUP, payload)
+  })
+  stopOmnichatTypingBridge = eventBus.on('omnichat:typing', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_TYPING_IN, payload)
+  })
+  stopOmnichatReceiptBridge = eventBus.on('omnichat:receipt', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_RECEIPT_IN, payload)
+  })
+  stopOmnichatCallRingBridge = eventBus.on('omnichat:call-ring', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_CALL_RING, payload)
+    // Appel entrant hors focus : on alerte via une notif native (son) et on fait
+    // sauter l'icone du dock jusqu'a l'activation. La sonnerie en boucle, elle, est
+    // jouee cote renderer. Fenetre deja au premier plan : le dialog in-app suffit.
+    if (mainWindow && !mainWindow.isFocused()) {
+      nativeNotifications.show({
+        title: 'Appel entrant',
+        body: payload.media === 'video' ? 'Appel video' : 'Appel audio',
+      })
+      if (process.platform === 'darwin' && app.dock) {
+        incomingCallBounceId = app.dock.bounce('critical')
+      }
+    }
+  })
+  stopOmnichatCallStateBridge = eventBus.on('omnichat:call-state', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_CALL_STATE, payload)
+    // Fin d'appel : on stoppe le rebond du dock declenche au call-ring.
+    if (process.platform === 'darwin' && app.dock && incomingCallBounceId !== null) {
+      app.dock.cancelBounce(incomingCallBounceId)
+      incomingCallBounceId = null
+    }
+  })
+  // Coffre omniPass verrouille (manuel ou auto-lock) -> le renderer repasse en mode verrouille.
+  stopPassvaultLockedBridge = eventBus.on('passvault:locked', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.PASSVAULT_LOCKED, payload)
+  })
+  // Verrouillage du coffre a la mise en veille et au verrouillage de session OS. L'auto-lock par
+  // inactivite (cote service) reste le filet principal. Le verrouillage sur simple perte de focus
+  // est volontairement ecarte en M0 : trop agressif tant que le deverrouillage biometrique (M3)
+  // ne rend pas la re-saisie indolore.
+  powerMonitor.on('suspend', () => passVaultService?.lock())
+  powerMonitor.on('lock-screen', () => passVaultService?.lock())
+  signalingClient.init(db)
+  signalingClient.start()
+  setupMediaPermissions()
+  createMainWindow()
+  initAutoUpdater()
+  void warnIfDiskUnencrypted()
+})
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createMainWindow()
+  }
+})
+
+app.on('before-quit', () => {
+  stopSyncBridge?.()
+  stopReminderBridge?.()
+  stopNativeNotificationsBridge?.()
+  stopOmnichatConnectionBridge?.()
+  stopOmnichatMessageBridge?.()
+  stopOmnichatPresenceBridge?.()
+  stopOmnichatGroupBridge?.()
+  stopOmnichatTypingBridge?.()
+  stopOmnichatReceiptBridge?.()
+  stopOmnichatCallRingBridge?.()
+  stopOmnichatCallStateBridge?.()
+  stopPassvaultLockedBridge?.()
+  signalingClient.stop()
+  syncEngine.stop()
+  reminderScheduler?.stop()
+  passVaultService?.lock()
+  databaseClient.close()
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit()
+  }
+})
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception', error)
+})
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled rejection', reason)
+})
