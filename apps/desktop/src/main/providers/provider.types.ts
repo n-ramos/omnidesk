@@ -171,10 +171,3 @@ export interface CommunicationProvider {
     input: ToggleReactionInput,
   ): Promise<void>
 }
-
-export type ProviderFactory = () => CommunicationProvider
-
-export interface ProviderRegistryEntry {
-  id: ProviderKind
-  create: ProviderFactory
-}

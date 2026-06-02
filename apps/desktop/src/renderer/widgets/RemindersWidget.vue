@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Bell, BellOff, Edit2, Plus, Trash2 } from 'lucide-vue-next'
+import { errorMessage } from '@shared/errors'
 import type {
   Reminder,
   ReminderRecurrence,
@@ -73,7 +74,7 @@ const load = async (): Promise<void> => {
   try {
     reminders.value = await api.value.list()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Echec du chargement.'
+    error.value = errorMessage(err, 'Echec du chargement.')
   }
 }
 
@@ -188,7 +189,7 @@ const submit = async (): Promise<void> => {
     }
     closeForm()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "L'enregistrement a echoue."
+    error.value = errorMessage(err, "L'enregistrement a echoue.")
   }
 }
 
@@ -198,7 +199,7 @@ const removeReminder = async (id: string): Promise<void> => {
     await api.value.delete(id)
     reminders.value = reminders.value.filter((entry) => entry.id !== id)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Echec de la suppression.'
+    error.value = errorMessage(err, 'Echec de la suppression.')
   }
 }
 
@@ -211,7 +212,7 @@ const toggleReminder = async (reminder: Reminder): Promise<void> => {
     })
     replaceReminder(updated)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Echec du changement.'
+    error.value = errorMessage(err, 'Echec du changement.')
   }
 }
 

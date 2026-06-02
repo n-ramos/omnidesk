@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { errorMessage } from '@shared/errors'
 import type {
   BrowserBookmark,
   BrowserBookmarkCategory,
@@ -214,7 +215,7 @@ export const useBrowserStore = defineStore('browser', {
         }
         this.initialized = true
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de charger OmniBrowser.'
+        this.error = errorMessage(error, 'Impossible de charger OmniBrowser.')
       }
     },
 
@@ -923,7 +924,7 @@ export const useBrowserStore = defineStore('browser', {
           this.extensions.push(extension)
         }
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "Impossible de charger l'extension."
+        this.error = errorMessage(error, "Impossible de charger l'extension.")
       }
     },
 
@@ -991,8 +992,6 @@ export const useBrowserStore = defineStore('browser', {
         return
       }
       const origin = credentialOrigin(tab.url)
-      // eslint-disable-next-line no-console
-      console.log('[cred-debug] captured', { count: captured.length, username: last.username, origin })
       if (!origin) {
         return
       }

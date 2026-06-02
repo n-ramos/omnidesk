@@ -61,5 +61,3 @@ export const unicodeFromSlackShortcode = (name: string): string | undefined => {
   const hex = reverseMap.get(name)
   return hex ? hexToEmoji(hex) : undefined
 }
-
-export const isSlackShortcode = (name: string): boolean => reverseMap.has(name)

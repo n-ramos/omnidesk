@@ -23,6 +23,10 @@ export class AppError extends Error {
   }
 }
 
+// Message lisible d'une erreur inconnue, avec repli si ce n'est pas une Error.
+export const errorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error ? error.message : fallback
+
 export const toSafeError = (error: unknown): AppError => {
   if (error instanceof AppError) {
     return error

@@ -139,4 +139,3 @@ export class NetworkFilterService {
 }
 
 export const webpageFilterService = new NetworkFilterService()
-export const networkFilterService = webpageFilterService

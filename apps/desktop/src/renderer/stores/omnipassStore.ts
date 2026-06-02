@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { errorMessage } from '@shared/errors'
 import type {
   CreatePassEntryInput,
   CreatePassFolderInput,
@@ -169,7 +170,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         this.applyState(state)
         await this.refreshAll()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de creer le coffre.'
+        this.error = errorMessage(error, 'Impossible de creer le coffre.')
       } finally {
         this.working = false
       }
@@ -187,7 +188,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         this.applyState(state)
         await this.refreshAll()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Deverrouillage impossible.'
+        this.error = errorMessage(error, 'Deverrouillage impossible.')
       } finally {
         this.working = false
       }
@@ -253,7 +254,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         await a.passvault.createEntry(input)
         await this.refreshEntries()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "Impossible d'enregistrer l'entree."
+        this.error = errorMessage(error, "Impossible d'enregistrer l'entree.")
         throw error
       } finally {
         this.working = false
@@ -271,7 +272,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         await a.passvault.updateEntry(input)
         await this.refreshEntries()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "Impossible de mettre a jour l'entree."
+        this.error = errorMessage(error, "Impossible de mettre a jour l'entree.")
         throw error
       } finally {
         this.working = false
@@ -317,7 +318,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         await a.passvault.createFolder(input)
         await this.refreshFolders()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de creer le dossier.'
+        this.error = errorMessage(error, 'Impossible de creer le dossier.')
         throw error
       } finally {
         this.working = false
@@ -333,7 +334,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         await a.passvault.updateFolder({ id, name })
         await this.refreshFolders()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Impossible de renommer le dossier.'
+        this.error = errorMessage(error, 'Impossible de renommer le dossier.')
         throw error
       }
     },
@@ -350,7 +351,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         await a.passvault.updateFolder({ id, parentId })
         await this.refreshFolders()
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Deplacement impossible.'
+        this.error = errorMessage(error, 'Deplacement impossible.')
       }
     },
 
@@ -425,7 +426,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         return true
       } catch (error) {
         this.error =
-          error instanceof Error ? error.message : 'Changement du mot de passe impossible.'
+          errorMessage(error, 'Changement du mot de passe impossible.')
         return false
       } finally {
         this.working = false
@@ -449,7 +450,7 @@ export const useOmnipassStore = defineStore('omnipass', {
       try {
         this.applyState(await a.passvault.biometricEnable())
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Activation Touch ID impossible.'
+        this.error = errorMessage(error, 'Activation Touch ID impossible.')
       }
     },
 
@@ -474,7 +475,7 @@ export const useOmnipassStore = defineStore('omnipass', {
           await this.refreshAll()
         }
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Deverrouillage biometrique impossible.'
+        this.error = errorMessage(error, 'Deverrouillage biometrique impossible.')
       } finally {
         this.working = false
       }
@@ -491,7 +492,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         this.recoveryEnabled = true
         return code
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Generation du code impossible.'
+        this.error = errorMessage(error, 'Generation du code impossible.')
         return null
       }
     },
@@ -517,7 +518,7 @@ export const useOmnipassStore = defineStore('omnipass', {
           await this.refreshAll()
         }
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Code de recuperation invalide.'
+        this.error = errorMessage(error, 'Code de recuperation invalide.')
       } finally {
         this.working = false
       }
@@ -532,7 +533,7 @@ export const useOmnipassStore = defineStore('omnipass', {
       try {
         return (await a.passvault.exportVault(password)).saved
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Export impossible.'
+        this.error = errorMessage(error, 'Export impossible.')
         return false
       }
     },
@@ -550,7 +551,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         }
         return result
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Import impossible.'
+        this.error = errorMessage(error, 'Import impossible.')
         return null
       }
     },
@@ -566,7 +567,7 @@ export const useOmnipassStore = defineStore('omnipass', {
         await this.refreshAll()
         return imported
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Import depuis le navigateur impossible.'
+        this.error = errorMessage(error, 'Import depuis le navigateur impossible.')
         return 0
       }
     },

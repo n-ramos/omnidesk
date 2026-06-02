@@ -1,5 +1,5 @@
 import Parser from 'rss-parser'
-import { AppError } from '@shared/errors'
+import { AppError, errorMessage } from '@shared/errors'
 import type { RssFeed, RssItem } from '@shared/models'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -79,8 +79,7 @@ export class RssService {
       this.cache.set(cacheKey, { fetchedAt: Date.now(), feed })
       return { ...feed, items: feed.items.slice(0, limit) }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Impossible de lire le flux.'
-      throw new AppError('PROVIDER_UNAVAILABLE', message)
+      throw new AppError('PROVIDER_UNAVAILABLE', errorMessage(error, 'Impossible de lire le flux.'))
     }
   }
 }

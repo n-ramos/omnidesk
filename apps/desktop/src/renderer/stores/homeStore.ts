@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { errorMessage } from '@shared/errors'
 import type { HomeWidgetInstance } from '@shared/models'
 import { getWidgetDefinition } from '@renderer/widgets/registry'
 
@@ -61,7 +62,6 @@ export const useHomeStore = defineStore('home', {
 
       try {
         const layout = await api.home.getLayout()
-        console.debug('[homeStore] loadLayout result', layout)
         if (layout.widgets.length === 0 && !this.isLoaded) {
           this.widgets = fallbackLayout()
           await this.saveLayout()
@@ -70,7 +70,7 @@ export const useHomeStore = defineStore('home', {
         }
         this.isLoaded = true
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "Impossible de charger l'accueil."
+        this.error = errorMessage(error, "Impossible de charger l'accueil.")
         if (!this.isLoaded) {
           this.widgets = fallbackLayout()
           this.isLoaded = true
@@ -98,14 +98,10 @@ export const useHomeStore = defineStore('home', {
           : undefined,
       }))
 
-      console.debug('[homeStore] saveLayout', payload)
-
       try {
-        const saved = await api.home.saveLayout(payload)
-        console.debug('[homeStore] saveLayout result', saved)
+        await api.home.saveLayout(payload)
       } catch (error) {
-        this.error =
-          error instanceof Error ? error.message : "Impossible d'enregistrer l'accueil."
+        this.error = errorMessage(error, "Impossible d'enregistrer l'accueil.")
         console.error('[homeStore] saveLayout failed', error)
       }
     },
