@@ -8,6 +8,7 @@ import type {
   UpdateMessageStateInput,
   UUID,
 } from '@shared/models'
+import { buildTextPreview } from '@shared/textPreview'
 import type {
   ProviderMessageAttachment,
   ProviderMessageReaction,
@@ -39,11 +40,6 @@ export interface InsertIncomingNativeMessageInput {
   isUnread: boolean
 }
 
-const buildPreview = (body: string): string => {
-  const compact = body.replace(/\s+/g, ' ').trim()
-  return compact.slice(0, 280)
-}
-
 const aggregateReactions = (
   rows: { name: string; is_self: 0 | 1 }[],
 ): MessageReactionSummary[] => {
@@ -67,7 +63,7 @@ export class MessageRepository {
 
   insertOutgoing(input: InsertOutgoingMessageInput): MessageSummary {
     const id = randomUUID()
-    const preview = buildPreview(input.body)
+    const preview = buildTextPreview(input.body, 280) ?? ''
     let storedAttachments: AttachmentSummary[] = []
 
     const transaction = this.db.transaction(() => {
@@ -141,7 +137,7 @@ export class MessageRepository {
   // compteur de non-lus) et met a jour le resume de conversation.
   insertIncomingNative(input: InsertIncomingNativeMessageInput): MessageSummary {
     const id = randomUUID()
-    const preview = buildPreview(input.body)
+    const preview = buildTextPreview(input.body, 280) ?? ''
 
     const transaction = this.db.transaction(() => {
       this.db

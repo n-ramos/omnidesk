@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { AppError } from '@shared/errors'
+import { buildTextPreview } from '@shared/textPreview'
 import { AccountRepository, type AccountRecord } from '@main/database/repositories/accountRepository'
 import { ConversationRepository } from '@main/database/repositories/conversationRepository'
 import { MessageRepository } from '@main/database/repositories/messageRepository'
@@ -14,15 +15,6 @@ import type {
   ProviderRuntimeContext,
   ProviderSyncResult,
 } from './provider.types'
-
-const previewBody = (value?: string): string | undefined => {
-  if (!value) {
-    return undefined
-  }
-
-  const compact = value.replace(/\s+/g, ' ').trim()
-  return compact ? compact.slice(0, 160) : undefined
-}
 
 const resolveSelfExternalUserId = (settings: Record<string, unknown>): string | undefined => {
   const value = settings.installerUserId
@@ -309,7 +301,7 @@ export class ProviderSyncService {
         accountId: account.id,
         conversationId: conversationIdsByExternalId.get(message.conversationExternalId),
         title,
-        body: previewBody(message.bodyPlain) ?? message.bodyPreview,
+        body: buildTextPreview(message.bodyPlain, 160) ?? message.bodyPreview,
       })
 
       eventBus.emit('notification:created', notification)

@@ -4,6 +4,7 @@ import { ImapFlow, type FetchMessageObject } from 'imapflow'
 import { simpleParser, type AddressObject, type ParsedMail } from 'mailparser'
 import nodemailer, { type Transporter } from 'nodemailer'
 import { AppError } from '@shared/errors'
+import { buildTextPreview } from '@shared/textPreview'
 import type {
   MailFolderRole,
   MailFolderSummary,
@@ -101,14 +102,6 @@ const normalizeSubject = (subject?: string): string => {
     cleaned = cleaned.replace(SUBJECT_PREFIX_PATTERN, '').trim()
   }
   return cleaned.length > 0 ? cleaned : '(sans objet)'
-}
-
-const buildPreview = (value?: string): string | undefined => {
-  if (!value) {
-    return undefined
-  }
-  const compact = value.replace(/\s+/g, ' ').trim()
-  return compact ? compact.slice(0, 280) : undefined
 }
 
 const ensureAngleWrapped = (token: string): string => {
@@ -574,7 +567,7 @@ const parseFetchedMessage = async (
   const isUnread = !flags.has('\\Seen')
 
   const { plain, html } = bodyTextFrom(parsed)
-  const preview = buildPreview(plain ?? html?.replace(/<[^>]+>/g, ' '))
+  const preview = buildTextPreview(plain ?? html?.replace(/<[^>]+>/g, ' '), 280)
   const externalMessageId = messageId ?? `uid:${message.uid}`
 
   const record: ProviderMessageRecord = {
