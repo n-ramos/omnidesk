@@ -53,4 +53,26 @@ describe('parseChangelog', () => {
   it('renvoie une liste vide sur un contenu sans version', () => {
     expect(parseChangelog('# Changelog\n\nRien ici.\n')).toEqual([])
   })
+
+  it('rassemble les lignes de continuation d une puce multi-lignes', () => {
+    const md = `## [1.0.0] - 2026-06-03
+
+### Corrige
+
+- Premiere ligne de la puce qui se poursuit avec un
+  surplus indente sur une autre ligne
+  et meme une troisieme.
+- Puce courte
+`
+    const [entry] = parseChangelog(md)
+    expect(entry?.groups).toEqual([
+      {
+        label: 'Corrige',
+        items: [
+          'Premiere ligne de la puce qui se poursuit avec un surplus indente sur une autre ligne et meme une troisieme.',
+          'Puce courte',
+        ],
+      },
+    ])
+  })
 })
