@@ -369,20 +369,24 @@ app.whenReady().then(() => {
   registerIpcHandlers(syncEngine, reminderScheduler, passVaultService)
   syncEngine.start()
   stopNativeNotificationsBridge = eventBus.on('notification:created', (notification) => {
-    // Banniere native (silencieuse) + on previent le renderer pour qu'il joue le son
-    // de notification (PJ3). Les rappels (Elodie) ne passent PAS par ici : ils ont
-    // leur propre chirp via reminder:fired.
-    nativeNotifications.show(notification)
-    mainWindow?.webContents.send(PRELOAD_EVENTS.NOTIFICATION_CREATED, notification)
+    // Banniere native + on previent le renderer pour qu'il joue le son de notification
+    // (notification.mp3). Banniere silencieuse tant que le renderer peut jouer le son ;
+    // sinon (fenetre pas encore prete) banniere sonore pour ne pas rater l'alerte.
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+    nativeNotifications.show(notification, { silent: Boolean(win) })
+    win?.webContents.send(PRELOAD_EVENTS.NOTIFICATION_CREATED, notification)
   })
   stopSyncBridge = eventBus.on('sync:completed', (payload) => {
     mainWindow?.webContents.send(PRELOAD_EVENTS.SYNC_UPDATED, payload)
   })
   stopReminderBridge = eventBus.on('reminder:fired', (notification) => {
-    // Rappel (Elodie) : bulle mascotte cote renderer + banniere native silencieuse.
-    // Le son est le chirp d'Elodie (pas PJ3) -> on ne forwarde pas NOTIFICATION_CREATED.
-    mainWindow?.webContents.send(PRELOAD_EVENTS.REMINDER_FIRED, notification)
-    nativeNotifications.show(notification)
+    // Rappel : on previent le renderer, qui joue le son de notification (de facon fiable,
+    // independamment de la mascotte) et affiche en plus la bulle d'Elodie. Banniere native
+    // silencieuse tant que le renderer peut jouer le son ; sinon (rappel au demarrage,
+    // fenetre pas encore prete) banniere SONORE pour ne pas rater l'echeance.
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+    win?.webContents.send(PRELOAD_EVENTS.REMINDER_FIRED, notification)
+    nativeNotifications.show(notification, { silent: Boolean(win) })
   })
   // On demarre le scheduler APRES avoir enregistre le pont reminder:fired : start() lance un
   // premier tick synchrone, et un rappel deja du (echeance atteinte pendant que l'app etait

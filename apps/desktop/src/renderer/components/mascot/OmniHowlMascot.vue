@@ -191,7 +191,9 @@ watch(
       dismissTimer = undefined
     }
     if (message) {
-      if (!store.muted) playMascotChirp()
+      // Un rappel joue deja le son de notification (cf. appStore) : pas de chirp en plus,
+      // sinon double son. Les autres messages d'Elodie gardent leur petit chirp.
+      if (!store.muted && message.kind !== 'reminder') playMascotChirp()
       const safety = message.durationMs + (REDUCED_MOTION ? 0 : 700)
       dismissTimer = setTimeout(dismissCurrent, safety)
     }

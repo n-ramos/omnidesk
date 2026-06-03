@@ -145,6 +145,7 @@ const KIND_ORDER: Array<ConversationKind | 'other'> = [
 
 let stopSyncListener: (() => void) | undefined
 let stopNotificationListener: (() => void) | undefined
+let stopReminderSoundListener: (() => void) | undefined
 let stopShortcutListener: (() => void) | undefined
 let stopNavShortcutListener: (() => void) | undefined
 let stopInspectListener: (() => void) | undefined
@@ -470,10 +471,18 @@ export const useAppStore = defineStore('app', {
           // Statut indisponible (ex. app non empaquetee) : on reste sur 'idle'.
         })
 
-      // Notification hors Elodie : on joue le son dedie (PJ3). Les rappels (mascotte)
-      // ne passent pas par cet evenement, ils gardent leur chirp (cf. main/index.ts).
+      // Notification : on joue le son dedie (notification.mp3).
       stopNotificationListener?.()
       stopNotificationListener = api.events.onNotificationCreated(() => {
+        playNotificationSound()
+      })
+
+      // Rappel (pense-bete) : meme son que les notifications, joue de facon fiable et
+      // independamment de la mascotte (qui peut etre masquee ou en sourdine). La bulle
+      // d'Elodie reste un plus visuel gere par le composant mascotte, sans son propre
+      // (le chirp est saute pour les rappels afin d'eviter un double son).
+      stopReminderSoundListener?.()
+      stopReminderSoundListener = api.events.onReminderFired(() => {
         playNotificationSound()
       })
 
