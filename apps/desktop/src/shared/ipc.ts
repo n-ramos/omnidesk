@@ -57,6 +57,13 @@ import type {
   WeatherSnapshot,
 } from './models'
 import type { AppNavShortcutAction } from './shortcuts'
+import type {
+  AiConnectionTestResult,
+  AiSettings,
+  AiSettingsPatch,
+  AiStatus,
+  AiTokenState,
+} from './ai'
 
 export const IPC_CHANNELS = {
   APP_GET_BOOTSTRAP: 'app:get-bootstrap',
@@ -233,6 +240,15 @@ export const IPC_CHANNELS = {
   PASSVAULT_FIND_FOR_ORIGIN: 'passvault:find-for-origin',
   BACKUP_EXPORT: 'backup:export',
   BACKUP_IMPORT: 'backup:import',
+  AI_GET_SETTINGS: 'ai:get-settings',
+  AI_SET_SETTINGS: 'ai:set-settings',
+  AI_SET_TOKEN: 'ai:set-token',
+  AI_CLEAR_TOKEN: 'ai:clear-token',
+  AI_TEST_CONNECTION: 'ai:test-connection',
+  AI_CHAT_SEND: 'ai:chat-send',
+  AI_CHAT_CANCEL: 'ai:chat-cancel',
+  AI_CONFIRM: 'ai:confirm',
+  AI_TRANSCRIBE: 'ai:transcribe',
 } as const
 
 export const PRELOAD_EVENTS = {
@@ -255,6 +271,12 @@ export const PRELOAD_EVENTS = {
   APP_NAV_SHORTCUT: 'app:nav-shortcut',
   PASSVAULT_LOCKED: 'passvault:locked',
   UPDATE_STATUS: 'update:status',
+  AI_CHUNK: 'ai:chunk',
+  AI_DONE: 'ai:done',
+  AI_ERROR: 'ai:error',
+  AI_TOOL_START: 'ai:tool-start',
+  AI_TOOL_END: 'ai:tool-end',
+  AI_CONFIRM_REQUEST: 'ai:confirm-request',
 } as const
 
 // Source unique des actions de raccourci : voir shortcuts.ts (re-export pour
@@ -525,6 +547,19 @@ export interface IpcRequestMap {
   [IPC_CHANNELS.PASSVAULT_FIND_FOR_ORIGIN]: { origin: string }
   [IPC_CHANNELS.BACKUP_EXPORT]: { password: string }
   [IPC_CHANNELS.BACKUP_IMPORT]: { password: string }
+  [IPC_CHANNELS.AI_GET_SETTINGS]: undefined
+  [IPC_CHANNELS.AI_SET_SETTINGS]: AiSettingsPatch
+  [IPC_CHANNELS.AI_SET_TOKEN]: { token: string }
+  [IPC_CHANNELS.AI_CLEAR_TOKEN]: undefined
+  [IPC_CHANNELS.AI_TEST_CONNECTION]: undefined
+  [IPC_CHANNELS.AI_CHAT_SEND]: { conversationId: string; message: string }
+  [IPC_CHANNELS.AI_CHAT_CANCEL]: { conversationId: string }
+  [IPC_CHANNELS.AI_CONFIRM]: {
+    requestId: string
+    approved: boolean
+    editedArguments?: Record<string, unknown>
+  }
+  [IPC_CHANNELS.AI_TRANSCRIBE]: { audio: Uint8Array; mimeType: string }
 }
 
 export interface IpcResponseMap {
@@ -706,6 +741,15 @@ export interface IpcResponseMap {
   [IPC_CHANNELS.PASSVAULT_FIND_FOR_ORIGIN]: { username: string; password: string } | null
   [IPC_CHANNELS.BACKUP_EXPORT]: { saved: boolean }
   [IPC_CHANNELS.BACKUP_IMPORT]: { restored: boolean }
+  [IPC_CHANNELS.AI_GET_SETTINGS]: AiStatus
+  [IPC_CHANNELS.AI_SET_SETTINGS]: AiSettings
+  [IPC_CHANNELS.AI_SET_TOKEN]: AiTokenState
+  [IPC_CHANNELS.AI_CLEAR_TOKEN]: AiTokenState
+  [IPC_CHANNELS.AI_TEST_CONNECTION]: AiConnectionTestResult
+  [IPC_CHANNELS.AI_CHAT_SEND]: { ok: true }
+  [IPC_CHANNELS.AI_CHAT_CANCEL]: { ok: true }
+  [IPC_CHANNELS.AI_CONFIRM]: { ok: true }
+  [IPC_CHANNELS.AI_TRANSCRIBE]: { text: string }
 }
 
 // Evenement pousse main -> renderer quand le coffre est verrouille (manuel ou auto-lock).

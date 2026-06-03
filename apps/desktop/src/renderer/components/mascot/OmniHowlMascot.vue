@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { EyeOff, Volume2, VolumeX } from 'lucide-vue-next'
+import { EyeOff, MessageCircle, Volume2, VolumeX } from 'lucide-vue-next'
 import OwlSprite from '@renderer/components/mascot/OwlSprite.vue'
 import SpeechBubble from '@renderer/components/mascot/SpeechBubble.vue'
 import { useAppStore } from '@renderer/stores/appStore'
@@ -9,12 +9,14 @@ import {
   useMascotStore,
   type MascotMessage,
 } from '@renderer/stores/mascotStore'
+import { useAiChatStore } from '@renderer/stores/aiChatStore'
 import { randomQuote } from '@renderer/data/quotes'
 import { playMascotChirp } from '@renderer/utils/mascotSound'
 import type { LocalNotification } from '@shared/models'
 
 const store = useMascotStore()
 const appStore = useAppStore()
+const chat = useAiChatStore()
 
 // Le lecteur multimedia est une barre en bas de fenetre : on remonte Elodie au-dessus
 // quand il est visible pour ne pas le recouvrir (ni bloquer le volume).
@@ -134,6 +136,11 @@ const onOwlClick = (): void => {
   // Un clic direct fait toujours reagir Elodie, meme en sourdine.
   const message = Math.random() < 0.7 ? buildQuote() : buildNudge()
   store.enqueue(message, { force: true })
+}
+
+// Ouvre la bulle de conversation IA (le bavardage/citations restent sur le clic de la chouette).
+const openChat = (): void => {
+  chat.openPanel()
 }
 
 const toggleMute = (): void => {
@@ -269,6 +276,14 @@ onBeforeUnmount(() => {
         >
           <Transition name="omnihoowl-fade">
             <div v-if="hover" class="absolute -top-2 left-0 z-10 flex gap-1">
+              <button
+                type="button"
+                class="grid size-6 place-items-center rounded-md bg-ink-800/90 text-zinc-400 ring-1 ring-white/10 transition hover:bg-ink-700 hover:text-accent-mint"
+                title="Discuter avec Elodie"
+                @click.stop="openChat"
+              >
+                <MessageCircle :size="13" />
+              </button>
               <button
                 type="button"
                 class="grid size-6 place-items-center rounded-md bg-ink-800/90 text-zinc-400 ring-1 ring-white/10 transition hover:bg-ink-700 hover:text-zinc-100"

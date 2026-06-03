@@ -35,6 +35,12 @@ let stopOmnichatCallStateBridge: (() => void) | undefined
 let stopOmnichatReactionBridge: (() => void) | undefined
 let stopOmnichatCallActiveBridge: (() => void) | undefined
 let stopPassvaultLockedBridge: (() => void) | undefined
+let stopAiChunkBridge: (() => void) | undefined
+let stopAiDoneBridge: (() => void) | undefined
+let stopAiErrorBridge: (() => void) | undefined
+let stopAiToolStartBridge: (() => void) | undefined
+let stopAiToolEndBridge: (() => void) | undefined
+let stopAiConfirmRequestBridge: (() => void) | undefined
 // Id du rebond du dock macOS declenche par un appel entrant (annule a la fin).
 let incomingCallBounceId: number | null = null
 
@@ -448,6 +454,26 @@ app.whenReady().then(() => {
   stopPassvaultLockedBridge = eventBus.on('passvault:locked', (payload) => {
     mainWindow?.webContents.send(PRELOAD_EVENTS.PASSVAULT_LOCKED, payload)
   })
+  // Pont assistant IA : streaming de la reponse main -> renderer (texte, fin, erreur).
+  // Le streaming IA peut etre en cours quand la fenetre se ferme : on garde contre un
+  // webContents detruit (sinon send() leve et casse l'emission de l'evenement).
+  const sendAiEvent = <Payload>(channel: string, payload: Payload): void => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, payload)
+    }
+  }
+  stopAiChunkBridge = eventBus.on('ai:chunk', (payload) => sendAiEvent(PRELOAD_EVENTS.AI_CHUNK, payload))
+  stopAiDoneBridge = eventBus.on('ai:done', (payload) => sendAiEvent(PRELOAD_EVENTS.AI_DONE, payload))
+  stopAiErrorBridge = eventBus.on('ai:error', (payload) => sendAiEvent(PRELOAD_EVENTS.AI_ERROR, payload))
+  stopAiToolStartBridge = eventBus.on('ai:tool-start', (payload) =>
+    sendAiEvent(PRELOAD_EVENTS.AI_TOOL_START, payload),
+  )
+  stopAiToolEndBridge = eventBus.on('ai:tool-end', (payload) =>
+    sendAiEvent(PRELOAD_EVENTS.AI_TOOL_END, payload),
+  )
+  stopAiConfirmRequestBridge = eventBus.on('ai:confirm-request', (payload) =>
+    sendAiEvent(PRELOAD_EVENTS.AI_CONFIRM_REQUEST, payload),
+  )
   // Verrouillage du coffre a la mise en veille et au verrouillage de session OS. L'auto-lock par
   // inactivite (cote service) reste le filet principal. Le verrouillage sur simple perte de focus
   // est volontairement ecarte en M0 : trop agressif tant que le deverrouillage biometrique (M3)
@@ -483,6 +509,12 @@ app.on('before-quit', () => {
   stopOmnichatReactionBridge?.()
   stopOmnichatCallActiveBridge?.()
   stopPassvaultLockedBridge?.()
+  stopAiChunkBridge?.()
+  stopAiDoneBridge?.()
+  stopAiErrorBridge?.()
+  stopAiToolStartBridge?.()
+  stopAiToolEndBridge?.()
+  stopAiConfirmRequestBridge?.()
   signalingClient.stop()
   syncEngine.stop()
   reminderScheduler?.stop()

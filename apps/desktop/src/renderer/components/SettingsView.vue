@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   Bell,
   Bird,
+  Bot,
   Check,
   Database,
   Download,
@@ -34,6 +35,7 @@ import StatusBadge from '@renderer/components/ui/StatusBadge.vue'
 import { confirm } from '@renderer/composables/useConfirm'
 import { useAppStore } from '@renderer/stores/appStore'
 import { nextMascotId, useMascotStore } from '@renderer/stores/mascotStore'
+import { useAiStore } from '@renderer/stores/aiStore'
 import { randomQuote } from '@renderer/data/quotes'
 import {
   ACCENT_PRESETS,
@@ -50,6 +52,68 @@ import type { AccountSetupStatus, StartupView } from '@shared/models'
 
 const store = useAppStore()
 const mascot = useMascotStore()
+const ai = useAiStore()
+
+// --- Assistant IA ------------------------------------------------------------
+const aiTokenInput = ref('')
+const aiTokenSaving = ref(false)
+const aiTesting = ref(false)
+const aiTestResult = ref<{ ok: boolean; message: string } | null>(null)
+
+onMounted(() => {
+  void ai.load()
+})
+
+const saveAiToken = async (): Promise<void> => {
+  const token = aiTokenInput.value.trim()
+  if (!token || aiTokenSaving.value) return
+  aiTokenSaving.value = true
+  aiTestResult.value = null
+  try {
+    await ai.setToken(token)
+    aiTokenInput.value = ''
+  } catch (error) {
+    aiTestResult.value = {
+      ok: false,
+      message: error instanceof Error ? error.message : "Impossible d'enregistrer la cle.",
+    }
+  } finally {
+    aiTokenSaving.value = false
+  }
+}
+
+const clearAiToken = async (): Promise<void> => {
+  aiTestResult.value = null
+  await ai.clearToken()
+}
+
+const toggleAiEnabled = (): void => {
+  void ai.save({ enabled: !ai.settings.enabled })
+}
+
+const onAiModelChange = (event: Event): void => {
+  const value = (event.target as HTMLInputElement).value.trim()
+  if (value && value !== ai.settings.model) {
+    void ai.save({ model: value })
+  }
+}
+
+const testAiConnection = async (): Promise<void> => {
+  if (aiTesting.value) return
+  aiTesting.value = true
+  aiTestResult.value = null
+  try {
+    await ai.testConnection()
+    aiTestResult.value = { ok: true, message: 'Connexion reussie.' }
+  } catch (error) {
+    aiTestResult.value = {
+      ok: false,
+      message: error instanceof Error ? error.message : 'Echec de la connexion.',
+    }
+  } finally {
+    aiTesting.value = false
+  }
+}
 
 const isMac = navigator.platform.toUpperCase().includes('MAC')
 
@@ -785,6 +849,111 @@ const resetBase = (): void => {
             <VolumeX v-else :size="14" />
             {{ mascot.muted ? 'Reactiver le son' : 'Couper le son' }}
           </button>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+        <div class="mb-3 flex items-center gap-3">
+          <Bot class="text-accent-mint" :size="19" />
+          <h3 class="text-sm font-semibold text-white">Assistant IA</h3>
+        </div>
+        <p class="mb-4 text-sm leading-6 text-zinc-400">
+          Donnez une cle OpenAI a Elodie pour qu'elle reponde a vos questions dans une bulle de
+          conversation. Votre cle est chiffree et ne quitte jamais cet ordinateur (sauf vers OpenAI).
+        </p>
+
+        <div class="flex items-center justify-between gap-3 rounded-xl bg-ink-950/55 p-3">
+          <span class="min-w-0">
+            <span class="block text-sm font-semibold text-zinc-100">Activer l'assistant</span>
+            <span class="mt-0.5 block text-xs leading-5 text-zinc-500">
+              Elodie pourra discuter et, plus tard, agir avec votre accord.
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="ai.settings.enabled"
+            aria-label="Activer l'assistant IA"
+            class="relative h-6 w-11 shrink-0 rounded-full transition"
+            :class="ai.settings.enabled ? 'bg-accent-mint' : 'bg-white/10'"
+            @click="toggleAiEnabled"
+          >
+            <span
+              class="absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition-transform"
+              :class="ai.settings.enabled ? 'translate-x-5' : 'translate-x-0'"
+            />
+          </button>
+        </div>
+
+        <div class="mt-2 rounded-xl bg-ink-950/55 p-3">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-sm font-semibold text-zinc-100">Cle API OpenAI</span>
+            <span
+              v-if="ai.hasToken"
+              class="inline-flex items-center gap-1.5 rounded-lg bg-accent-mint/15 px-2.5 py-1 text-xs font-medium text-accent-mint ring-1 ring-accent-mint/30"
+            >
+              <ShieldCheck :size="13" />
+              Cle enregistree
+            </span>
+          </div>
+          <div class="mt-2 flex items-center gap-2">
+            <input
+              v-model="aiTokenInput"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              :placeholder="ai.hasToken ? 'Remplacer la cle (sk-...)' : 'sk-...'"
+              class="min-w-0 flex-1 rounded-lg bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-white/10 transition focus:ring-accent-mint/40"
+              @keydown.enter="saveAiToken"
+            />
+            <BaseButton
+              variant="primary"
+              :disabled="!aiTokenInput.trim() || aiTokenSaving"
+              @click="saveAiToken"
+            >
+              Enregistrer
+            </BaseButton>
+            <button
+              v-if="ai.hasToken"
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-zinc-300 ring-1 ring-white/10 transition hover:bg-accent-coral/10 hover:text-accent-coral"
+              @click="clearAiToken"
+            >
+              Supprimer
+            </button>
+          </div>
+          <p class="mt-2 text-xs leading-5 text-zinc-500">
+            Creez une cle sur platform.openai.com. Elle est chiffree par votre systeme.
+          </p>
+        </div>
+
+        <div class="mt-2 rounded-xl bg-ink-950/55 p-3">
+          <label class="block text-sm font-semibold text-zinc-100" for="ai-model">Modele</label>
+          <input
+            id="ai-model"
+            :value="ai.settings.model"
+            placeholder="gpt-4o-mini"
+            spellcheck="false"
+            class="mt-2 w-full rounded-lg bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-white/10 transition focus:ring-accent-mint/40"
+            @change="onAiModelChange"
+          />
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <BaseButton
+              variant="secondary"
+              :disabled="aiTesting || !ai.hasToken"
+              @click="testAiConnection"
+            >
+              <Spinner v-if="aiTesting" :size="14" label="Test en cours" />
+              Tester la connexion
+            </BaseButton>
+            <span
+              v-if="aiTestResult"
+              class="text-xs"
+              :class="aiTestResult.ok ? 'text-accent-mint' : 'text-accent-coral'"
+            >
+              {{ aiTestResult.message }}
+            </span>
+          </div>
         </div>
       </div>
 

@@ -23,6 +23,8 @@ import ImapInboxView from '@renderer/components/ImapInboxView.vue'
 import MediaPlayer from '@renderer/components/MediaPlayer.vue'
 import SettingsView from '@renderer/components/SettingsView.vue'
 import OmniHowlMascot from '@renderer/components/mascot/OmniHowlMascot.vue'
+import AiChatPanel from '@renderer/components/ai/AiChatPanel.vue'
+import AiConfirmDialog from '@renderer/components/ai/AiConfirmDialog.vue'
 import ConfirmDialog from '@renderer/components/ui/ConfirmDialog.vue'
 import ChangelogModal from '@renderer/components/ChangelogModal.vue'
 import Spinner from '@renderer/components/ui/Spinner.vue'
@@ -254,5 +256,7 @@ onMounted(() => {
     </Transition>
 
     <OmniHowlMascot />
+    <AiChatPanel />
+    <AiConfirmDialog />
   </main>
 </template>
