@@ -51,6 +51,12 @@ jobs:
 
       - name: Build (typecheck + electron-vite)
         run: pnpm --filter @omnidesk/desktop build
+        env:
+          # URL du proxy figee dans le bundle main (define electron-vite). C'est
+          # CE step qui la grave dans out/main : sans ce secret, le DMG affichera
+          # "OmniProxy n'est pas configure". Choix "URL seule" : on n'embarque ni
+          # cle d'API ni jeton (le DMG est grand public et extractible).
+          OMNIDESK_PROXY_URL: ${{ secrets.OMNIDESK_PROXY_URL }}
 
       - name: Build & publish (electron-builder)
         run: pnpm --filter @omnidesk/desktop exec electron-builder --publish always
