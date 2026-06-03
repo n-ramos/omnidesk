@@ -39,6 +39,15 @@ import type {
   UpdateMessageStateInput,
   UpdateReminderInput,
 } from '@shared/models'
+import type {
+  AiChunkEvent,
+  AiConfirmRequestEvent,
+  AiDoneEvent,
+  AiErrorEvent,
+  AiSettingsPatch,
+  AiToolEndEvent,
+  AiToolStartEvent,
+} from '@shared/ai'
 
 const invoke = <Channel extends IpcChannel>(
   channel: Channel,
@@ -282,6 +291,33 @@ export interface OmnideskApi {
     importBackup: (
       password: string,
     ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.BACKUP_IMPORT]>
+  }
+  ai: {
+    getSettings: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_GET_SETTINGS]>
+    setSettings: (
+      patch: AiSettingsPatch,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_SET_SETTINGS]>
+    setToken: (token: string) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_SET_TOKEN]>
+    clearToken: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_CLEAR_TOKEN]>
+    testConnection: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_TEST_CONNECTION]>
+    chat: {
+      send: (
+        conversationId: string,
+        message: string,
+      ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_CHAT_SEND]>
+      cancel: (
+        conversationId: string,
+      ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_CHAT_CANCEL]>
+    }
+    confirm: (
+      requestId: string,
+      approved: boolean,
+      editedArguments?: Record<string, unknown>,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_CONFIRM]>
+    transcribe: (
+      audio: Uint8Array,
+      mimeType: string,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AI_TRANSCRIBE]>
   }
   home: {
     getLayout: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.HOME_GET_LAYOUT]>
@@ -573,6 +609,12 @@ export interface OmnideskApi {
     onOmnichatCallActive: (listener: (event: OmnichatCallActiveEvent) => void) => () => void
     onPassvaultLocked: (listener: (event: PassVaultLockedEvent) => void) => () => void
     onUpdateStatus: (listener: (status: AppUpdateStatus) => void) => () => void
+    onAiChunk: (listener: (event: AiChunkEvent) => void) => () => void
+    onAiDone: (listener: (event: AiDoneEvent) => void) => () => void
+    onAiError: (listener: (event: AiErrorEvent) => void) => () => void
+    onAiToolStart: (listener: (event: AiToolStartEvent) => void) => () => void
+    onAiToolEnd: (listener: (event: AiToolEndEvent) => void) => () => void
+    onAiConfirmRequest: (listener: (event: AiConfirmRequestEvent) => void) => () => void
   }
 }
 
@@ -692,6 +734,21 @@ export const omnideskApi: OmnideskApi = {
       invoke(IPC_CHANNELS.SETTINGS_SET_NAV_SHORTCUTS, { shortcuts }),
     exportBackup: (password) => invoke(IPC_CHANNELS.BACKUP_EXPORT, { password }),
     importBackup: (password) => invoke(IPC_CHANNELS.BACKUP_IMPORT, { password }),
+  },
+  ai: {
+    getSettings: () => invoke(IPC_CHANNELS.AI_GET_SETTINGS, undefined),
+    setSettings: (patch) => invoke(IPC_CHANNELS.AI_SET_SETTINGS, patch),
+    setToken: (token) => invoke(IPC_CHANNELS.AI_SET_TOKEN, { token }),
+    clearToken: () => invoke(IPC_CHANNELS.AI_CLEAR_TOKEN, undefined),
+    testConnection: () => invoke(IPC_CHANNELS.AI_TEST_CONNECTION, undefined),
+    chat: {
+      send: (conversationId, message) =>
+        invoke(IPC_CHANNELS.AI_CHAT_SEND, { conversationId, message }),
+      cancel: (conversationId) => invoke(IPC_CHANNELS.AI_CHAT_CANCEL, { conversationId }),
+    },
+    confirm: (requestId, approved, editedArguments) =>
+      invoke(IPC_CHANNELS.AI_CONFIRM, { requestId, approved, editedArguments }),
+    transcribe: (audio, mimeType) => invoke(IPC_CHANNELS.AI_TRANSCRIBE, { audio, mimeType }),
   },
   home: {
     getLayout: () => invoke(IPC_CHANNELS.HOME_GET_LAYOUT, undefined),
@@ -1053,6 +1110,57 @@ export const omnideskApi: OmnideskApi = {
 
       ipcRenderer.on(PRELOAD_EVENTS.UPDATE_STATUS, wrappedListener)
       return () => ipcRenderer.off(PRELOAD_EVENTS.UPDATE_STATUS, wrappedListener)
+    },
+    onAiChunk: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, payload: AiChunkEvent): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.AI_CHUNK, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.AI_CHUNK, wrappedListener)
+    },
+    onAiDone: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, payload: AiDoneEvent): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.AI_DONE, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.AI_DONE, wrappedListener)
+    },
+    onAiError: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, payload: AiErrorEvent): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.AI_ERROR, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.AI_ERROR, wrappedListener)
+    },
+    onAiToolStart: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, payload: AiToolStartEvent): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.AI_TOOL_START, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.AI_TOOL_START, wrappedListener)
+    },
+    onAiToolEnd: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, payload: AiToolEndEvent): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.AI_TOOL_END, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.AI_TOOL_END, wrappedListener)
+    },
+    onAiConfirmRequest: (listener) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        payload: AiConfirmRequestEvent,
+      ): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.AI_CONFIRM_REQUEST, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.AI_CONFIRM_REQUEST, wrappedListener)
     },
   },
 }

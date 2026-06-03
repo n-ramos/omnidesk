@@ -12,6 +12,14 @@ import type {
   OmnichatReceiptEvent,
   OmnichatTypingEvent,
 } from '@shared/models'
+import type {
+  AiChunkEvent,
+  AiConfirmRequestEvent,
+  AiDoneEvent,
+  AiErrorEvent,
+  AiToolEndEvent,
+  AiToolStartEvent,
+} from '@shared/ai'
 
 interface AppEventMap {
   'notification:created': LocalNotification
@@ -31,6 +39,13 @@ interface AppEventMap {
   // Coffre omniPass : la cle maitre a ete purgee de la memoire (verrouillage manuel ou auto).
   'passvault:locked': { reason: 'manual' | 'timeout' }
   'passvault:unlocked': Record<string, never>
+  // Assistant IA : streaming de la reponse (cf. aiAgent).
+  'ai:chunk': AiChunkEvent
+  'ai:done': AiDoneEvent
+  'ai:error': AiErrorEvent
+  'ai:tool-start': AiToolStartEvent
+  'ai:tool-end': AiToolEndEvent
+  'ai:confirm-request': AiConfirmRequestEvent
 }
 
 type AppEventName = keyof AppEventMap

@@ -11,6 +11,13 @@ export type AppErrorCode =
   | 'VAULT_ALREADY_INITIALIZED'
   | 'VAULT_LOCKED'
   | 'INVALID_MASTER_PASSWORD'
+  | 'AI_NOT_CONFIGURED'
+  | 'AI_AUTH_FAILED'
+  | 'AI_RATE_LIMITED'
+  | 'AI_NETWORK'
+  | 'AI_TOOL_UNKNOWN'
+  | 'AI_TOOL_INVALID_ARGS'
+  | 'AI_PROVIDER_ERROR'
 
 export class AppError extends Error {
   constructor(

@@ -43,6 +43,11 @@ import type { SyncEngine } from '@main/sync/syncEngine'
 import type { Weekday } from '@shared/models'
 import { autoUpdate } from '@main/update/autoUpdater'
 import { getChangelog } from '@main/update/changelog'
+import { aiSettingsService } from '@main/ai/aiSettingsService'
+import { createAiProvider } from '@main/ai/aiProviderFactory'
+import { aiAgentService } from '@main/ai/aiAgent'
+import { registerMailActions } from '@main/ai/actions'
+import { aiSecretVault } from '@main/security/aiSecretVault'
 import { registerValidatedHandler } from './createIpcRouter'
 
 const providerIdSchema = z.enum(['imap', 'webpage'])
@@ -119,6 +124,18 @@ const DEFAULT_ACCENT_COLOR = '#8ee6bf'
 const BASE_COLOR_KEY = 'baseColor'
 const DEFAULT_BASE_COLOR = '#090a0d'
 const NAV_SHORTCUTS_KEY = 'navShortcuts'
+
+// provider limite a 'openai' tant qu'un seul adapter est livre (le type AiProviderId prevoit
+// 'anthropic' ; on l'ajoutera ici en meme temps que l'adapter pour ne jamais accepter un
+// fournisseur non implemente).
+const aiSettingsPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  provider: z.enum(['openai']).optional(),
+  model: z.string().trim().min(1).max(80).optional(),
+  sttModel: z.string().trim().min(1).max(80).optional(),
+  baseUrl: z.string().trim().url().max(2048).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+})
 
 const browserId = z.string().uuid()
 const browserIdList = z.array(z.string().uuid()).max(500)
@@ -224,6 +241,10 @@ export const registerIpcHandlers = (
   // pose les defauts + enregistre les routeurs d'action au demarrage).
   rebuildAppMenu({ browser: browser.getResolvedShortcuts(), nav: getResolvedNavShortcuts() })
   providers.upsertAll(providerRegistry.list())
+
+  // Actions IA disponibles pour l'assistant (lecture/gestion des mails). Enregistrees ici car
+  // elles reutilisent les services deja instancies.
+  registerMailActions({ accounts, conversations, providerConnections })
 
   registerValidatedHandler(IPC_CHANNELS.APP_GET_BOOTSTRAP, z.undefined(), () => ({
     appVersion: app.getVersion(),
@@ -945,6 +966,105 @@ export const registerIpcHandlers = (
       rebuildAppMenu({ nav: getResolvedNavShortcuts() })
       return { shortcuts: sanitized }
     },
+  )
+
+  // --- Assistant IA ---------------------------------------------------------
+  // Reglages non sensibles + presence de cle. La cle elle-meme (aiSecretVault) est chiffree et
+  // ne traverse jamais l'IPC en lecture : seul un booleen hasToken est expose au renderer.
+  registerValidatedHandler(IPC_CHANNELS.AI_GET_SETTINGS, z.undefined(), () => ({
+    settings: aiSettingsService.get(),
+    hasToken: aiSecretVault.hasToken(),
+  }))
+
+  registerValidatedHandler(IPC_CHANNELS.AI_SET_SETTINGS, aiSettingsPatchSchema, (patch) =>
+    aiSettingsService.set(patch),
+  )
+
+  // redactPayload : la cle ne doit jamais finir dans les logs, meme en cas d'echec de validation.
+  registerValidatedHandler(
+    IPC_CHANNELS.AI_SET_TOKEN,
+    z.object({ token: z.string().trim().min(20).max(512) }),
+    ({ token }) => {
+      aiSecretVault.setToken(token)
+      return { hasToken: true }
+    },
+    { redactPayload: true },
+  )
+
+  registerValidatedHandler(IPC_CHANNELS.AI_CLEAR_TOKEN, z.undefined(), () => {
+    aiSecretVault.clearToken()
+    return { hasToken: false }
+  })
+
+  // Appel reel au fournisseur (GET /models), depuis le main : valide la cle enregistree.
+  registerValidatedHandler(IPC_CHANNELS.AI_TEST_CONNECTION, z.undefined(), () =>
+    createAiProvider().testConnection(),
+  )
+
+  // Chat : on lance le streaming en tache de fond (la reponse arrive par les evenements
+  // ai:chunk / ai:done / ai:error) et on rend la main aussitot au renderer.
+  registerValidatedHandler(
+    IPC_CHANNELS.AI_CHAT_SEND,
+    z.object({
+      conversationId: z.string().uuid(),
+      message: z.string().trim().min(1).max(8000),
+    }),
+    ({ conversationId, message }) => {
+      void aiAgentService.send(conversationId, message)
+      return { ok: true as const }
+    },
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.AI_CHAT_CANCEL,
+    z.object({ conversationId: z.string().uuid() }),
+    ({ conversationId }) => {
+      aiAgentService.cancel(conversationId)
+      return { ok: true as const }
+    },
+  )
+
+  // Reponse de l'utilisateur a une demande de confirmation d'action mutante.
+  registerValidatedHandler(
+    IPC_CHANNELS.AI_CONFIRM,
+    z.object({
+      requestId: z.string().uuid(),
+      approved: z.boolean(),
+      editedArguments: z.record(z.unknown()).optional(),
+    }),
+    ({ requestId, approved, editedArguments }) => {
+      aiAgentService.resolveConfirmation(requestId, { approved, editedArguments })
+      return { ok: true as const }
+    },
+  )
+
+  // STT : audio capte cote renderer -> transcription par le fournisseur (depuis le main).
+  // redactPayload : on ne journalise jamais le buffer audio.
+  registerValidatedHandler(
+    IPC_CHANNELS.AI_TRANSCRIBE,
+    z.object({
+      audio: z.instanceof(Uint8Array),
+      mimeType: z.string().trim().min(1).max(120),
+    }),
+    async ({ audio, mimeType }) => {
+      const provider = createAiProvider()
+      if (!provider.capabilities.stt || !provider.transcribe) {
+        throw new AppError(
+          'AI_PROVIDER_ERROR',
+          "La transcription vocale n'est pas disponible pour ce fournisseur.",
+        )
+      }
+      const settings = aiSettingsService.get()
+      const result = await provider.transcribe({
+        audio,
+        mimeType,
+        fileName: 'audio.webm',
+        model: settings.sttModel,
+        language: 'fr',
+      })
+      return { text: result.text }
+    },
+    { redactPayload: true },
   )
 
   registerValidatedHandler(IPC_CHANNELS.HOME_GET_LAYOUT, z.undefined(), () => {
