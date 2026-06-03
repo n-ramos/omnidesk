@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import NotificationsBell from '@renderer/components/NotificationsBell.vue'
+import UpdateIndicator from '@renderer/components/UpdateIndicator.vue'
 
 defineProps<{
   isMac?: boolean
@@ -12,6 +13,7 @@ defineProps<{
     :class="isMac ? 'pl-[84px]' : 'pl-3'"
   >
     <div class="app-no-drag flex items-center gap-1">
+      <UpdateIndicator />
       <NotificationsBell />
     </div>
   </header>

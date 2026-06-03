@@ -1,0 +1,64 @@
+name: Release
+
+# Declenche par un tag "v*" (ex. v0.1.0). Chaque OS construit ses artefacts avec
+# electron-builder et les televerse (--publish always) sur la GitHub Release du tag :
+# .dmg/.zip (mac), .exe NSIS (win), .AppImage (linux) + les manifestes latest*.yml.
+# Ce sont ces manifestes que lit electron-updater cote client pour detecter une MAJ.
+#
+# Prerequis : bumper la version dans apps/desktop/package.json AVANT de taguer, et
+# poser un tag identique (package.json 0.1.0 -> tag v0.1.0). Le depot doit etre public
+# (ou un GH_TOKEN doit etre embarque cote client) pour que l'auto-update lise la release.
+#
+# Secrets attendus (Settings > Secrets and variables > Actions) pour la signature macOS :
+#   CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+# Sans eux, le job macOS echoue a la signature/notarisation (les autres OS continuent
+# grace a fail-fast: false). GITHUB_TOKEN est fourni automatiquement par Actions.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (typecheck + electron-vite)
+        run: pnpm --filter @omnidesk/desktop build
+
+      - name: Build & publish (electron-builder)
+        run: pnpm --filter @omnidesk/desktop exec electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signature + notarisation macOS (ignores hors macOS).
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

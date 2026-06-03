@@ -79,8 +79,9 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "VOTRE_COMPTE_OU_ORG_GITHUB",
-        "repo": "omnidesk"
+        "owner": "n-ramos",
+        "repo": "omnidesk",
+        "releaseType": "release"
       }
     ],
     "mac": {

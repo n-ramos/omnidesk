@@ -13,7 +13,7 @@ import { ReminderScheduler } from '@main/reminders/reminderScheduler'
 import { PassVaultService } from '@main/omnipass/passVaultService'
 import { SyncEngine } from '@main/sync/syncEngine'
 import { warnIfDiskUnencrypted } from '@main/security/diskEncryption'
-import { autoUpdater } from 'electron-updater'
+import { autoUpdate } from '@main/update/autoUpdater'
 import { PRELOAD_EVENTS } from '@shared/ipc'
 
 let mainWindow: BrowserWindow | null = null
@@ -306,23 +306,6 @@ const createMainWindow = (): void => {
   }
 }
 
-const initAutoUpdater = (): void => {
-  // Les mises a jour ne fonctionnent que sur une app empaquetee et signee :
-  // electron-updater verifie la signature du paquet telecharge avant de l'installer.
-  // En developpement, checkForUpdates leverait une erreur (pas de feed) : on sort tot.
-  if (!app.isPackaged) {
-    return
-  }
-
-  autoUpdater.logger = logger
-  autoUpdater.on('error', (error) => {
-    logger.error('Auto-update check failed', error)
-  })
-
-  // Telecharge la MAJ en arriere-plan et notifie l'utilisateur quand elle est prete.
-  void autoUpdater.checkForUpdatesAndNotify()
-}
-
 app.on('second-instance', () => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore()
@@ -434,7 +417,7 @@ app.whenReady().then(() => {
   signalingClient.start()
   setupMediaPermissions()
   createMainWindow()
-  initAutoUpdater()
+  autoUpdate.init({ getWindow: () => mainWindow })
   void warnIfDiskUnencrypted()
 })
 

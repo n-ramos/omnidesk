@@ -41,6 +41,7 @@ import type { ReminderScheduler } from '@main/reminders/reminderScheduler'
 import type { PassVaultService } from '@main/omnipass/passVaultService'
 import type { SyncEngine } from '@main/sync/syncEngine'
 import type { Weekday } from '@shared/models'
+import { autoUpdate } from '@main/update/autoUpdater'
 import { registerValidatedHandler } from './createIpcRouter'
 
 const providerIdSchema = z.enum(['imap', 'webpage'])
@@ -229,6 +230,22 @@ export const registerIpcHandlers = (
     databaseReady: true,
     providers: providerRegistry.list(),
   }))
+
+  // Mise a jour applicative (electron-updater) : etat courant pour amorcer l'UI,
+  // verification manuelle, et installation de la MAJ telechargee (redemarre l'app).
+  registerValidatedHandler(IPC_CHANNELS.APP_GET_UPDATE_STATUS, z.undefined(), () =>
+    autoUpdate.getStatus(),
+  )
+
+  registerValidatedHandler(IPC_CHANNELS.APP_CHECK_UPDATES, z.undefined(), async () => {
+    await autoUpdate.checkForUpdates()
+    return { ok: true } as const
+  })
+
+  registerValidatedHandler(IPC_CHANNELS.APP_INSTALL_UPDATE, z.undefined(), () => {
+    autoUpdate.installUpdate()
+    return { ok: true } as const
+  })
 
   registerValidatedHandler(IPC_CHANNELS.PROVIDERS_LIST, z.undefined(), () => providerRegistry.list())
 

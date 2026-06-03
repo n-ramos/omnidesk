@@ -61,6 +61,9 @@ import type { AppNavShortcutAction } from './shortcuts'
 export const IPC_CHANNELS = {
   APP_GET_BOOTSTRAP: 'app:get-bootstrap',
   APP_SET_BADGE_COUNT: 'app:set-badge-count',
+  APP_GET_UPDATE_STATUS: 'app:get-update-status',
+  APP_CHECK_UPDATES: 'app:check-updates',
+  APP_INSTALL_UPDATE: 'app:install-update',
   PROVIDERS_LIST: 'providers:list',
   ACCOUNTS_LIST: 'accounts:list',
   ACCOUNTS_CREATE_DRAFT: 'accounts:create-draft',
@@ -250,6 +253,7 @@ export const PRELOAD_EVENTS = {
   OMNICHAT_CALL_ACTIVE: 'omnichat:call-active',
   APP_NAV_SHORTCUT: 'app:nav-shortcut',
   PASSVAULT_LOCKED: 'passvault:locked',
+  UPDATE_STATUS: 'update:status',
 } as const
 
 // Source unique des actions de raccourci : voir shortcuts.ts (re-export pour
@@ -261,6 +265,9 @@ export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
 export interface IpcRequestMap {
   [IPC_CHANNELS.APP_GET_BOOTSTRAP]: undefined
   [IPC_CHANNELS.APP_SET_BADGE_COUNT]: { count: number }
+  [IPC_CHANNELS.APP_GET_UPDATE_STATUS]: undefined
+  [IPC_CHANNELS.APP_CHECK_UPDATES]: undefined
+  [IPC_CHANNELS.APP_INSTALL_UPDATE]: undefined
   [IPC_CHANNELS.PROVIDERS_LIST]: undefined
   [IPC_CHANNELS.ACCOUNTS_LIST]: undefined
   [IPC_CHANNELS.ACCOUNTS_CREATE_DRAFT]: CreateDraftAccountInput
@@ -521,6 +528,9 @@ export interface IpcRequestMap {
 export interface IpcResponseMap {
   [IPC_CHANNELS.APP_GET_BOOTSTRAP]: AppBootstrap
   [IPC_CHANNELS.APP_SET_BADGE_COUNT]: { ok: true }
+  [IPC_CHANNELS.APP_GET_UPDATE_STATUS]: AppUpdateStatus
+  [IPC_CHANNELS.APP_CHECK_UPDATES]: { ok: true }
+  [IPC_CHANNELS.APP_INSTALL_UPDATE]: { ok: true }
   [IPC_CHANNELS.PROVIDERS_LIST]: ProviderDescriptor[]
   [IPC_CHANNELS.ACCOUNTS_LIST]: AccountSummary[]
   [IPC_CHANNELS.ACCOUNTS_CREATE_DRAFT]: AccountSummary
@@ -723,3 +733,17 @@ export interface SyncUpdatedEvent {
   conversations: number
   messages: number
 }
+
+/**
+ * Etat de la mise a jour applicative (electron-updater). Pousse au renderer via
+ * PRELOAD_EVENTS.UPDATE_STATUS a chaque transition, et lisible a la demande via
+ * APP_GET_UPDATE_STATUS (pour amorcer l'UI au montage). 'idle' = a jour ou pas
+ * encore verifie ; l'indicateur reste masque tant qu'aucune MAJ n'est en jeu.
+ */
+export type AppUpdateStatus =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  | { phase: 'available'; version: string }
+  | { phase: 'downloading'; percent: number }
+  | { phase: 'downloaded'; version: string }
+  | { phase: 'error'; message: string }

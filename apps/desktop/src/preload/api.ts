@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
   AppNavShortcutAction,
+  AppUpdateStatus,
   IpcChannel,
   IpcRequestMap,
   IpcResponseMap,
@@ -50,6 +51,9 @@ export interface OmnideskApi {
     setBadgeCount: (
       count: number,
     ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_SET_BADGE_COUNT]>
+    getUpdateStatus: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_GET_UPDATE_STATUS]>
+    checkForUpdates: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_CHECK_UPDATES]>
+    installUpdate: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_INSTALL_UPDATE]>
   }
   providers: {
     list: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.PROVIDERS_LIST]>
@@ -567,6 +571,7 @@ export interface OmnideskApi {
     onOmnichatReaction: (listener: (event: OmnichatReactionEvent) => void) => () => void
     onOmnichatCallActive: (listener: (event: OmnichatCallActiveEvent) => void) => () => void
     onPassvaultLocked: (listener: (event: PassVaultLockedEvent) => void) => () => void
+    onUpdateStatus: (listener: (status: AppUpdateStatus) => void) => () => void
   }
 }
 
@@ -574,6 +579,9 @@ export const omnideskApi: OmnideskApi = {
   app: {
     getBootstrap: () => invoke(IPC_CHANNELS.APP_GET_BOOTSTRAP, undefined),
     setBadgeCount: (count) => invoke(IPC_CHANNELS.APP_SET_BADGE_COUNT, { count }),
+    getUpdateStatus: () => invoke(IPC_CHANNELS.APP_GET_UPDATE_STATUS, undefined),
+    checkForUpdates: () => invoke(IPC_CHANNELS.APP_CHECK_UPDATES, undefined),
+    installUpdate: () => invoke(IPC_CHANNELS.APP_INSTALL_UPDATE, undefined),
   },
   providers: {
     list: () => invoke(IPC_CHANNELS.PROVIDERS_LIST, undefined),
@@ -1032,6 +1040,17 @@ export const omnideskApi: OmnideskApi = {
 
       ipcRenderer.on(PRELOAD_EVENTS.PASSVAULT_LOCKED, wrappedListener)
       return () => ipcRenderer.off(PRELOAD_EVENTS.PASSVAULT_LOCKED, wrappedListener)
+    },
+    onUpdateStatus: (listener) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        status: AppUpdateStatus,
+      ): void => {
+        listener(status)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.UPDATE_STATUS, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.UPDATE_STATUS, wrappedListener)
     },
   },
 }

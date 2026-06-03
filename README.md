@@ -45,6 +45,36 @@ pnpm --filter @omnidesk/desktop package
 Run `rebuild:native` after installing dependencies, changing Electron versions, or
 seeing a native module ABI error from `better-sqlite3` or `keytar`.
 
+## Mises a jour automatiques
+
+Omnidesk se met a jour via [`electron-updater`](https://www.electron.build/auto-update).
+L'app verifie les MAJ au lancement (puis toutes les 6 h) et telecharge en arriere-plan.
+Quand une version est prete, un indicateur apparait a cote de la cloche (une fleche qui
+descend) : un clic redemarre l'app pour l'installer. Une notification systeme previent
+aussi lorsque la fenetre est masquee.
+
+### Publier une mise a jour
+
+Le workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) s'occupe de
+tout sur un tag `v*` : il construit les artefacts par OS et les publie sur la **GitHub
+Release** du tag (dmg/zip, exe NSIS, AppImage + les manifestes `latest*.yml` lus par les
+clients). La version du tag doit correspondre a celle de `apps/desktop/package.json`.
+
+```bash
+# 1. bumper la version dans apps/desktop/package.json (ex. "version": "0.2.0")
+# 2. commit, tag identique, push
+git commit -am "release: v0.2.0"
+git tag v0.2.0
+git push origin main --tags
+```
+
+> Le depot doit etre **public** pour qu'electron-updater lise les releases sans jeton.
+> La signature/notarisation macOS exige les secrets `CSC_LINK`, `CSC_KEY_PASSWORD`,
+> `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` et `APPLE_TEAM_ID` (voir l'en-tete du workflow).
+
+Pour relire une release avant diffusion, passer `releaseType` de `release` a `draft` dans
+`build.publish` (`apps/desktop/package.json`) et publier la release manuellement.
+
 ## Security Baseline
 
 - `contextIsolation: true`

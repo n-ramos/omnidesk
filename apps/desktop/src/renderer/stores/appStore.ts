@@ -11,6 +11,7 @@ import {
   type AppNavShortcutAction,
 } from '@shared/shortcuts'
 import type { OmnideskApi } from '@preload/api'
+import type { AppUpdateStatus } from '@shared/ipc'
 import type {
   AccountSummary,
   AppBootstrap,
@@ -84,6 +85,7 @@ interface AppState {
   conversations: ConversationSummary[]
   selectedConversation?: ConversationDetail
   notifications: LocalNotification[]
+  updateStatus: AppUpdateStatus
   localStatus?: LocalStatus
   contacts: ContactSummary[]
   contactsLoadedForAccountId?: UUID
@@ -144,6 +146,7 @@ let stopNotificationListener: (() => void) | undefined
 let stopShortcutListener: (() => void) | undefined
 let stopNavShortcutListener: (() => void) | undefined
 let stopInspectListener: (() => void) | undefined
+let stopUpdateListener: (() => void) | undefined
 
 const fallbackProviders = (): ProviderDescriptor[] => [
   {
@@ -244,6 +247,7 @@ export const useAppStore = defineStore('app', {
     accounts: [],
     conversations: [],
     notifications: [],
+    updateStatus: { phase: 'idle' },
     contacts: [],
     imapFolders: {},
     composeOpen: false,
@@ -384,6 +388,14 @@ export const useAppStore = defineStore('app', {
   },
 
   actions: {
+    async checkForUpdates(): Promise<void> {
+      await getApi()?.app.checkForUpdates()
+    },
+
+    async installUpdate(): Promise<void> {
+      await getApi()?.app.installUpdate()
+    },
+
     async bootstrapApp(): Promise<void> {
       this.isLoading = true
       this.error = undefined
@@ -402,6 +414,21 @@ export const useAppStore = defineStore('app', {
       stopSyncListener = api.events.onSyncUpdated(() => {
         void this.silentReload()
       })
+
+      // Mise a jour applicative : l'indicateur pres de la cloche suit l'etat pousse par
+      // le main, amorce avec le dernier etat connu (ex. MAJ deja prete au demarrage).
+      stopUpdateListener?.()
+      stopUpdateListener = api.events.onUpdateStatus((status) => {
+        this.updateStatus = status
+      })
+      void api.app
+        .getUpdateStatus()
+        .then((status) => {
+          this.updateStatus = status
+        })
+        .catch(() => {
+          // Statut indisponible (ex. app non empaquetee) : on reste sur 'idle'.
+        })
 
       // Notification hors Elodie : on joue le son dedie (PJ3). Les rappels (mascotte)
       // ne passent pas par cet evenement, ils gardent leur chirp (cf. main/index.ts).
