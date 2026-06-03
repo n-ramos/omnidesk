@@ -8,6 +8,21 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.1.1] - 2026-06-03
+
+### Corrige
+
+- Demarrage plus robuste : si la cle de chiffrement locale ne peut pas etre lue, l'app
+  affiche desormais un message clair au lieu de rester inerte avec des fonctions qui
+  echouent toutes (sauvegarde, comptes, coffre...).
+
+### Modifie
+
+- Identite interne de l'app fixee a "Omnidesk" des le lancement, pour que le coffre et la
+  base restent accessibles de facon stable d'une mise a jour a l'autre. Sur une machine
+  issue d'une version anterieure, le profil local est recree une fois (reconfigurer les
+  comptes ; restaurer une sauvegarde pour retrouver le coffre).
+
 ## [0.1.0] - 2026-06-03
 
 ### Ajoute
