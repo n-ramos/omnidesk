@@ -8,6 +8,18 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.1.3] - 2026-06-03
+
+### Corrige
+
+- Deverrouillage par Touch ID plus robuste : sur un build signe, la cle biometrique
+  scellee sous une identite d'app anterieure pouvait empecher l'ouverture du coffre
+  (erreur de dechiffrement). L'app purge desormais ce cache illisible et repropose
+  d'activer Touch ID, sans jamais bloquer l'acces (le mot de passe maitre reste la
+  source de verite).
+- Notifications natives macOS : l'envoi et les echecs sont desormais journalises,
+  pour diagnostiquer plus facilement les notifications manquantes.
+
 ## [0.1.1] - 2026-06-03
 
 ### Corrige
