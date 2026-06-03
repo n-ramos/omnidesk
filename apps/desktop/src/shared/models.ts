@@ -268,9 +268,6 @@ export interface LocalStatus {
     sandbox: boolean
     tokenStorage: 'safeStorage'
   }
-  nativeModules: {
-    rebuildCommand: string
-  }
 }
 
 export type StartupView = 'default-home' | 'custom-home' | 'inbox' | 'notifications'

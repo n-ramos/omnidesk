@@ -368,7 +368,6 @@ app.whenReady().then(() => {
   passVaultService = new PassVaultService(db)
   registerIpcHandlers(syncEngine, reminderScheduler, passVaultService)
   syncEngine.start()
-  reminderScheduler.start()
   stopNativeNotificationsBridge = eventBus.on('notification:created', (notification) => {
     // Banniere native (silencieuse) + on previent le renderer pour qu'il joue le son
     // de notification (PJ3). Les rappels (Elodie) ne passent PAS par ici : ils ont
@@ -385,6 +384,14 @@ app.whenReady().then(() => {
     mainWindow?.webContents.send(PRELOAD_EVENTS.REMINDER_FIRED, notification)
     nativeNotifications.show(notification)
   })
+  // On demarre le scheduler APRES avoir enregistre le pont reminder:fired : start() lance un
+  // premier tick synchrone, et un rappel deja du (echeance atteinte pendant que l'app etait
+  // fermee) doit trouver le pont en place, sinon il serait consomme dans le vide (banniere
+  // native ET bulle perdues, le rappel etant aussitot marque comme declenche). La fenetre
+  // n'existe pas encore a ce stade (createMainWindow plus bas) : pour ce rappel de demarrage la
+  // bulle Elodie ne s'affichera pas, mais la banniere native part et la notif est persistee
+  // (visible dans le widget notifications recentes).
+  reminderScheduler.start()
   // Pont signalisation omnichat -> renderer (meme schema que la synchro).
   stopOmnichatConnectionBridge = eventBus.on('omnichat:connection', (payload) => {
     mainWindow?.webContents.send(PRELOAD_EVENTS.OMNICHAT_CONNECTION, payload)

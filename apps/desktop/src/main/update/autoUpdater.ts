@@ -58,8 +58,13 @@ export const autoUpdate = {
     })
 
     // Telecharge en arriere-plan et affiche une notif native quand la MAJ est prete
-    // (complement a l'indicateur in-app, utile lorsque la fenetre est masquee).
-    void autoUpdater.checkForUpdatesAndNotify()
+    // (complement a l'indicateur in-app, utile lorsque la fenetre est masquee). On passe
+    // un texte FR : sans downloadNotification, electron-updater affiche sa banniere par
+    // defaut en anglais ("A new update is ready to install").
+    void autoUpdater.checkForUpdatesAndNotify({
+      title: 'Mise a jour prete',
+      body: 'Omnidesk {version} a ete telechargee et sera installee a la fermeture.',
+    })
     setInterval(() => {
       void autoUpdater.checkForUpdates()
     }, RECHECK_INTERVAL_MS)

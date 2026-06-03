@@ -85,6 +85,9 @@ export class ReminderScheduler {
       const now = new Date()
       const nowIso = now.toISOString()
       const due = this.reminders.findDue(nowIso)
+      if (due.length > 0) {
+        logger.info(`reminders: ${due.length} rappel(s) du(s) declenche(s)`)
+      }
       for (const reminder of due) {
         const notification = this.notifications.create({
           level: 'info',

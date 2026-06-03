@@ -1017,9 +1017,6 @@ export const registerIpcHandlers = (
       sandbox: true,
       tokenStorage: 'safeStorage' as const,
     },
-    nativeModules: {
-      rebuildCommand: 'pnpm --filter @omnidesk/desktop rebuild:native',
-    },
   }))
 
   registerValidatedHandler(
