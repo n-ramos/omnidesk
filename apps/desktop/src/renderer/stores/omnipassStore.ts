@@ -476,6 +476,13 @@ export const useOmnipassStore = defineStore('omnipass', {
         }
       } catch (error) {
         this.error = errorMessage(error, 'Deverrouillage biometrique impossible.')
+        // Le main a pu desactiver Touch ID (cle enveloppee illisible) : on resynchronise l'etat
+        // pour masquer le bouton biometrique et inviter au mot de passe maitre.
+        try {
+          this.applyState(await a.passvault.getStatus())
+        } catch {
+          // Statut indisponible : on garde l'etat courant.
+        }
       } finally {
         this.working = false
       }
