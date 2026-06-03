@@ -34,13 +34,15 @@ const refreshNavState = (): void => {
   }
 }
 
-let attached = false
+// Identite du webview deja equipe (plutot qu'un simple booleen) : on n'empile pas les ecouteurs
+// si l'element est inchange, mais un element re-cree est bien re-equipe a son tour.
+let listenersBoundTo: WebpageWebviewElement | null = null
 
 const attachListeners = (webview: WebpageWebviewElement): void => {
-  if (attached) {
+  if (listenersBoundTo === webview) {
     return
   }
-  attached = true
+  listenersBoundTo = webview
 
   webview.addEventListener('did-start-loading', () => {
     store.setTabNavState(props.tab.id, { isLoading: true })
