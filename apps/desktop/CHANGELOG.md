@@ -8,6 +8,15 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.1.7] - 2026-06-03
+
+### Corrige
+
+- Appels (omnichat) de nouveau disponibles dans l'application installee : l'adresse du
+  service OmniProxy est desormais integree a la version distribuee. Auparavant, en dehors
+  de l'environnement de developpement, l'app affichait "Les appels sont indisponibles :
+  OmniProxy n'est pas configure" et les appels etaient impossibles.
+
 ## [0.1.6] - 2026-06-03
 
 ### Corrige
