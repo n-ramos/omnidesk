@@ -14,8 +14,8 @@ and renders a premium dark-first shell with empty states.
 - Vite via `electron-vite`
 - Vue 3 and Pinia
 - Tailwind CSS
-- SQLite via `better-sqlite3`
-- Keychain token storage via `keytar`
+- SQLite via `libsql` (N-API, ABI-stable)
+- Secret storage via Electron's `safeStorage`
 - ESLint and Prettier
 - pnpm workspaces
 
@@ -42,8 +42,10 @@ pnpm --filter @omnidesk/desktop rebuild:native
 pnpm --filter @omnidesk/desktop package
 ```
 
-Run `rebuild:native` after installing dependencies, changing Electron versions, or
-seeing a native module ABI error from `better-sqlite3` or `keytar`.
+`rebuild:native` (alias for `electron-builder install-app-deps`) rebuilds native modules
+after a fresh install. Because `libsql` ships ABI-stable N-API prebuilt binaries and
+secrets use Electron's built-in `safeStorage`, changing the Electron version no longer
+requires a rebuild.
 
 ## Mises a jour automatiques
 
@@ -127,7 +129,8 @@ Vous pouvez ajouter plusieurs comptes mail (un par adresse).
      (RFC 6186), avec un repli sur les MX du domaine.
 4. Verifiez/ajustez les serveurs IMAP et SMTP proposes, puis **Connecter**.
 5. Omnidesk teste la connexion (IMAP + SMTP) avant de persister le compte.
-   Le mot de passe est stocke dans le trousseau systeme via `keytar`.
+   Le mot de passe est chiffre via le `safeStorage` d'Electron (dont la cle maitre est
+   gardee dans le trousseau du systeme) puis conserve en base locale chiffree.
 
 Les fils de discussion sont reconstitues a partir des entetes `Message-ID`,
 `In-Reply-To` et `References`. Les reponses reutilisent automatiquement le
