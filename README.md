@@ -114,13 +114,14 @@ cp apps/desktop/.env.example apps/desktop/.env
 ## OmniProxy (omnichat / LiveKit)
 
 L'**omnichat** (appels audio/video, cf. plus bas) delègue ses secrets a un backend léger,
-**OmniProxy** (projet voisin `../OmniProxy`), pour ne JAMAIS embarquer de cle dans l'app de
+**OmniProxy** (depot separe : [github.com/n-ramos/omniproxy](https://github.com/n-ramos/omniproxy)), pour ne JAMAIS embarquer de cle dans l'app de
 bureau : OmniProxy mint les jetons LiveKit et pilote l'enregistrement. Sans OmniProxy
 configure, l'omnichat est simplement desactive.
 
 ### Mise en route
 
 ```bash
+git clone https://github.com/n-ramos/omniproxy.git ../OmniProxy
 cd ../OmniProxy
 pnpm install
 cp .env.example .env        # renseigner OMNIPROXY_API_KEY, LIVEKIT_*, S3_* ...
@@ -135,7 +136,7 @@ OMNIDESK_PROXY_URL=http://127.0.0.1:8787
 OMNIDESK_PROXY_API_KEY=<identique a OMNIPROXY_API_KEY>
 ```
 
-Voir `../OmniProxy/README.md` pour le detail (endpoints, securite, infra LiveKit).
+Voir le [README d'OmniProxy](https://github.com/n-ramos/omniproxy) pour le detail (endpoints, securite, infra LiveKit).
 
 ## Slack / Teams (mode web)
 
