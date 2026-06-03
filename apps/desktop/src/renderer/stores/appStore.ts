@@ -5,13 +5,14 @@ import { useOmnichatStore } from '@renderer/stores/omnichatStore'
 import { readStoredAccent } from '@renderer/utils/accentColor'
 import { readStoredBase } from '@renderer/utils/baseColor'
 import { playNotificationSound } from '@renderer/utils/sounds'
+import { compareVersions } from '@renderer/utils/version'
 import {
   navActionToSlotIndex,
   resolveNavShortcuts,
   type AppNavShortcutAction,
 } from '@shared/shortcuts'
 import type { OmnideskApi } from '@preload/api'
-import type { AppUpdateStatus } from '@shared/ipc'
+import type { AppUpdateStatus, ChangelogEntry } from '@shared/ipc'
 import type {
   AccountSummary,
   AppBootstrap,
@@ -86,6 +87,7 @@ interface AppState {
   selectedConversation?: ConversationDetail
   notifications: LocalNotification[]
   updateStatus: AppUpdateStatus
+  changelogEntries: ChangelogEntry[]
   localStatus?: LocalStatus
   contacts: ContactSummary[]
   contactsLoadedForAccountId?: UUID
@@ -248,6 +250,7 @@ export const useAppStore = defineStore('app', {
     conversations: [],
     notifications: [],
     updateStatus: { phase: 'idle' },
+    changelogEntries: [],
     contacts: [],
     imapFolders: {},
     composeOpen: false,
@@ -396,6 +399,43 @@ export const useAppStore = defineStore('app', {
       await getApi()?.app.installUpdate()
     },
 
+    // Affiche la modal "Nouveautes" une seule fois apres une mise a jour : compare la
+    // version installee a la derniere vue (localStorage). Premiere ouverture = on memorise
+    // sans rien montrer ; sinon on montre les sections du changelog plus recentes.
+    async maybeShowChangelog(version: string): Promise<void> {
+      if (!version) {
+        return
+      }
+      const STORAGE_KEY = 'omnidesk:lastSeenVersion'
+      let lastSeen: string | null = null
+      try {
+        lastSeen = localStorage.getItem(STORAGE_KEY)
+      } catch {
+        return
+      }
+
+      if (lastSeen && compareVersions(version, lastSeen) > 0) {
+        const since = lastSeen
+        const api = getApi()
+        const entries = api ? await api.app.getChangelog() : []
+        this.changelogEntries = entries.filter(
+          (entry) =>
+            compareVersions(entry.version, since) > 0 &&
+            compareVersions(entry.version, version) <= 0,
+        )
+      }
+
+      try {
+        localStorage.setItem(STORAGE_KEY, version)
+      } catch {
+        // localStorage indisponible : sans gravite, la modal repassera au prochain lancement.
+      }
+    },
+
+    dismissChangelog(): void {
+      this.changelogEntries = []
+    },
+
     async bootstrapApp(): Promise<void> {
       this.isLoading = true
       this.error = undefined
@@ -532,6 +572,7 @@ export const useAppStore = defineStore('app', {
         if (bootstrapResult.status === 'fulfilled') {
           this.bootstrap = bootstrapResult.value
           this.providers = sortProviders(bootstrapResult.value.providers)
+          void this.maybeShowChangelog(bootstrapResult.value.appVersion)
         } else if (providersResult.status === 'fulfilled') {
           this.providers = sortProviders(providersResult.value)
         }

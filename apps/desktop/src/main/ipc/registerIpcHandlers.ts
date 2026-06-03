@@ -42,6 +42,7 @@ import type { PassVaultService } from '@main/omnipass/passVaultService'
 import type { SyncEngine } from '@main/sync/syncEngine'
 import type { Weekday } from '@shared/models'
 import { autoUpdate } from '@main/update/autoUpdater'
+import { getChangelog } from '@main/update/changelog'
 import { registerValidatedHandler } from './createIpcRouter'
 
 const providerIdSchema = z.enum(['imap', 'webpage'])
@@ -246,6 +247,9 @@ export const registerIpcHandlers = (
     autoUpdate.installUpdate()
     return { ok: true } as const
   })
+
+  // Changelog (CHANGELOG.md empaquete) pour la modal "Nouveautes" affichee apres une MAJ.
+  registerValidatedHandler(IPC_CHANNELS.APP_GET_CHANGELOG, z.undefined(), () => getChangelog())
 
   registerValidatedHandler(IPC_CHANNELS.PROVIDERS_LIST, z.undefined(), () => providerRegistry.list())
 

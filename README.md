@@ -55,6 +55,10 @@ Quand une version est prete, un indicateur apparait a cote de la cloche (une fle
 descend) : un clic redemarre l'app pour l'installer. Une notification systeme previent
 aussi lorsque la fenetre est masquee.
 
+Apres une mise a jour, une modal **Nouveautes** s'affiche une seule fois : elle reprend les
+sections de [`apps/desktop/CHANGELOG.md`](apps/desktop/CHANGELOG.md) plus recentes que la
+version precedente. Pensez donc a ajouter une section a chaque release.
+
 ### Publier une mise a jour
 
 Le workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) s'occupe de
@@ -62,12 +66,15 @@ tout sur un tag `v*` : il construit les artefacts par OS et les publie sur la **
 Release** du tag (dmg/zip, exe NSIS, AppImage + les manifestes `latest*.yml` lus par les
 clients). La version du tag doit correspondre a celle de `apps/desktop/package.json`.
 
+`main` est protege (push direct interdit), donc le bump passe par une PR :
+
 ```bash
-# 1. bumper la version dans apps/desktop/package.json (ex. "version": "0.2.0")
-# 2. commit, tag identique, push
-git commit -am "release: v0.2.0"
+# 1. sur une branche : ajouter une section ## [0.2.0] - AAAA-MM-JJ dans
+#    apps/desktop/CHANGELOG.md + bumper "version" dans apps/desktop/package.json
+# 2. ouvrir la PR et la merger dans main
+# 3. taguer le commit sur main et pousser le tag (c'est le tag qui declenche la release)
 git tag v0.2.0
-git push origin main --tags
+git push origin v0.2.0
 ```
 
 > Le depot doit etre **public** pour qu'electron-updater lise les releases sans jeton.
