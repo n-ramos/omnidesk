@@ -60,7 +60,26 @@ const loadEnvFromDisk = (): void => {
   }
 }
 
+// Variables figees a la compilation par electron.vite.config.ts (define). Dans
+// le DMG, aucun .env n'est embarque : ces valeurs en sont l'unique source. On
+// n'y trouve QUE des donnees non sensibles (URL du proxy), jamais de cle/jeton.
+// Le `typeof` evite un ReferenceError hors build Vite (ex. tests vitest).
+declare const __OMNIDESK_BAKED_ENV__: Record<string, string> | undefined
+
+const applyBakedEnv = (): void => {
+  if (typeof __OMNIDESK_BAKED_ENV__ === 'undefined') {
+    return
+  }
+  for (const [key, value] of Object.entries(__OMNIDESK_BAKED_ENV__)) {
+    // Repli uniquement : un .env sur disque (dev) ou un process.env reel priment.
+    if (value && (process.env[key] === undefined || process.env[key] === '')) {
+      process.env[key] = value
+    }
+  }
+}
+
 loadEnvFromDisk()
+applyBakedEnv()
 
 const envSchema = z.object({
   OMNIDESK_APP_PROTOCOL: z.string().min(1).default('omnidesk'),
