@@ -343,6 +343,14 @@ const formatBadge = (count: number): string => (count > 99 ? '99+' : String(coun
       <Settings :size="18" />
     </button>
 
+    <p
+      v-if="store.bootstrap?.appVersion"
+      class="mt-2 text-[10px] font-medium leading-none tabular-nums text-zinc-600"
+      title="Version d'Omnidesk"
+    >
+      v{{ store.bootstrap?.appVersion }}
+    </p>
+
     <div
       v-if="contextMenu"
       data-account-context-menu

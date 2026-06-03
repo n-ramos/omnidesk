@@ -944,11 +944,9 @@ const resetBase = (): void => {
       <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <PackageCheck class="text-accent-mint" :size="19" />
-          <h3 class="text-sm font-semibold text-white">Commande utile</h3>
+          <h3 class="text-sm font-semibold text-white">Version</h3>
         </div>
-        <code class="block rounded-xl bg-ink-950/70 p-3 text-xs text-zinc-400">
-          {{ store.localStatus?.nativeModules.rebuildCommand }}
-        </code>
+        <p class="text-sm leading-6 text-zinc-400">Omnidesk {{ store.localStatus?.appVersion }}</p>
       </div>
     </div>
   </section>
