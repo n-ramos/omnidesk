@@ -487,7 +487,13 @@ export class PassVaultService {
       // possede plus (changement d'identite/signature de l'app, ou donnees venues d'une autre
       // machine). Le blob est definitivement illisible : on le purge pour que biometricEnabled
       // repasse a false (l'UI reproposera d'activer Touch ID). Le mot de passe maitre reste le repli.
-      this.vaultRepo.setBiometricWrapped(null)
+      // Purge best-effort : un echec de purge ne doit jamais masquer le message de repli ci-dessous
+      // (sinon l'erreur brute du moteur SQL remonterait a l'UI a la place de la consigne utilisateur).
+      try {
+        this.vaultRepo.setBiometricWrapped(null)
+      } catch (purgeError) {
+        logger.error('omnipass: echec de la purge de la cle biometrique illisible', purgeError)
+      }
       logger.warn('omnipass: cle biometrique illisible, deverrouillage biometrique reinitialise', {
         error: errorMessage(error, 'safeStorage.decryptString a echoue'),
       })

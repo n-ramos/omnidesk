@@ -59,6 +59,15 @@ export class PassVaultRepository {
   }
 
   setBiometricWrapped(wrappedB64: string | null): void {
+    // libsql route un argument UNIQUE vers le binding par parametres nommes des que typeof === 'object' ;
+    // or `typeof null === 'object'`, donc `.run(null)` jette "failed to downcast any to object". On efface
+    // donc via un NULL litteral (sans parametre) ; la branche valeur conserve le bind positionnel normal.
+    if (wrappedB64 === null) {
+      this.db
+        .prepare("UPDATE pass_vault SET biometric_wrapped_b64 = NULL, updated_at = datetime('now') WHERE id = 1")
+        .run()
+      return
+    }
     this.db
       .prepare(
         "UPDATE pass_vault SET biometric_wrapped_b64 = ?, updated_at = datetime('now') WHERE id = 1",
