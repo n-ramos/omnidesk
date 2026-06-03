@@ -8,6 +8,24 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.1.4] - 2026-06-03
+
+### Ajoute
+
+- Numero de version d'Omnidesk visible en bas du rail de navigation et dans les
+  reglages (carte "Version"), pour savoir d'un coup d'oeil quelle version est installee.
+
+### Corrige
+
+- Notification native de mise a jour prete affichee en francais (elle apparaissait
+  jusqu'ici en anglais).
+- Rappel arrive a echeance pendant que l'app etait fermee : il declenche desormais sa
+  notification au demarrage (banniere native + entree dans les notifications recentes)
+  au lieu d'etre consomme silencieusement.
+- Pages web integrees (Slack/Teams, onglets OmniBrowser, widgets) plus stables sur les
+  longues sessions : les ecouteurs d'evenements ne s'empilent plus a chaque rechargement
+  ou navigation, evitant une fuite memoire et des traitements en double.
+
 ## [0.1.3] - 2026-06-03
 
 ### Corrige
