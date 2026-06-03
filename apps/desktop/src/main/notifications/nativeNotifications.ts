@@ -2,19 +2,22 @@ import { Notification } from 'electron'
 import { logger } from '@main/logger'
 
 export class NativeNotificationService {
-  show(notification: { title: string; body?: string }): void {
+  show(notification: { title: string; body?: string }, options: { silent?: boolean } = {}): void {
     if (!Notification.isSupported()) {
       logger.warn('notifications: notifications natives non supportees par la plateforme')
       return
     }
 
+    // Par defaut la banniere est silencieuse : le son est joue cote renderer (notification.mp3),
+    // ce qui permet un mp3 et un volume controles, et macOS ne sait de toute facon pas lire un
+    // fichier sonore arbitraire via cette API. Mais quand le renderer ne peut PAS jouer le son
+    // (rappel arrive a echeance avant que la fenetre existe, au demarrage), l'appelant passe
+    // silent: false pour laisser macOS jouer son propre son et ne pas rater l'alerte.
+    const silent = options.silent ?? true
     const native = new Notification({
       title: notification.title,
       body: notification.body,
-      // Banniere silencieuse : le son est joue cote renderer (PJ3 pour les notifs,
-      // chirp pour Elodie), ce qui permet un mp3 et un volume controles. macOS ne
-      // sait de toute facon pas lire un fichier sonore arbitraire via cette API.
-      silent: true,
+      silent,
     })
     // macOS n'expose pas d'API de demande de permission pour les notifications locales : le
     // systeme enregistre l'app (Reglages > Notifications) au premier envoi, sans invite modale.
@@ -23,7 +26,7 @@ export class NativeNotificationService {
     native.on('failed', (_event, error) => {
       logger.warn('notifications: affichage natif refuse par le systeme', { error })
     })
-    logger.info('notifications: affichage notification native')
+    logger.info('notifications: affichage notification native', { silent })
     native.show()
   }
 }

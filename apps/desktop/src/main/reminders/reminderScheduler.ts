@@ -94,9 +94,8 @@ export class ReminderScheduler {
           title: reminder.title,
           body: reminder.body,
         })
-        // Rappel = domaine d'Elodie : on emet seulement reminder:fired. Le main
-        // affiche la banniere native silencieuse et la mascotte joue son chirp
-        // (pas le son de notification PJ3, reserve aux notifs hors Elodie).
+        // Un rappel echu : on emet reminder:fired. Le main affiche la banniere native
+        // et previent le renderer, qui joue le son de notification et la bulle d'Elodie.
         eventBus.emit('reminder:fired', notification)
 
         const next = computeNextOccurrence(reminder.recurrence, now, now)

@@ -8,6 +8,18 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.1.6] - 2026-06-03
+
+### Corrige
+
+- Pense-betes (rappels) de nouveau audibles : un rappel arrive a echeance joue desormais
+  le son de notification de maniere fiable, meme si la mascotte Elodie est masquee ou en
+  sourdine (le son ne dependait plus que d'elle, on pouvait donc rater le rappel). Un
+  rappel echu pendant que l'app etait fermee declenche aussi un son a son apparition au
+  demarrage.
+- Modal "Nouveautes" : les nouveautes redigees sur plusieurs lignes ne sont plus coupees
+  en plein milieu ; le texte complet de chaque point s'affiche.
+
 ## [0.1.5] - 2026-06-03
 
 ### Corrige
