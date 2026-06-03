@@ -317,8 +317,17 @@ app.on('open-url', (event) => {
   event.preventDefault()
 })
 
+// Nom affiche partout (menu macOS via le role appMenu, notifications natives, dossier
+// userData). Sans cela, l'app peut s'afficher sous le nom "Electron" (notamment en dev).
+app.setName('Omnidesk')
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('app.omnidesk.desktop')
+  // Volet "A propos d'Omnidesk" (macOS) : nom + version, sans reference a Electron.
+  app.setAboutPanelOptions({
+    applicationName: 'Omnidesk',
+    applicationVersion: app.getVersion(),
+  })
   app.setAsDefaultProtocolClient(appConfig.OMNIDESK_APP_PROTOCOL)
 
   // Menu applicatif personnalise : les raccourcis navigateur (Cmd+R, Cmd+T, Cmd+L...)
