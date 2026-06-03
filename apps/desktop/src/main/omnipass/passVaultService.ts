@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { clipboard, safeStorage, systemPreferences } from 'electron'
 import type { Database } from 'better-sqlite3'
-import { AppError } from '@shared/errors'
+import { AppError, errorMessage } from '@shared/errors'
 import type {
   CreatePassEntryInput,
   CreatePassFolderInput,
@@ -479,7 +479,23 @@ export class PassVaultService {
     } catch {
       throw new AppError('INVALID_MASTER_PASSWORD', 'Authentification biometrique echouee.')
     }
-    const keyB64 = safeStorage.decryptString(Buffer.from(wrapped, 'base64'))
+    let keyB64: string
+    try {
+      keyB64 = safeStorage.decryptString(Buffer.from(wrapped, 'base64'))
+    } catch (error) {
+      // La cle enveloppee a ete scellee par une cle safeStorage que le trousseau de la session ne
+      // possede plus (changement d'identite/signature de l'app, ou donnees venues d'une autre
+      // machine). Le blob est definitivement illisible : on le purge pour que biometricEnabled
+      // repasse a false (l'UI reproposera d'activer Touch ID). Le mot de passe maitre reste le repli.
+      this.vaultRepo.setBiometricWrapped(null)
+      logger.warn('omnipass: cle biometrique illisible, deverrouillage biometrique reinitialise', {
+        error: errorMessage(error, 'safeStorage.decryptString a echoue'),
+      })
+      throw new AppError(
+        'VALIDATION_FAILED',
+        'Le deverrouillage biometrique a ete reinitialise. Deverrouillez avec le mot de passe maitre, puis reactivez Touch ID.',
+      )
+    }
     this.adoptKey(Buffer.from(keyB64, 'base64'))
     logger.info('omnipass: vault unlocked (biometric)')
     return this.getStatus()
