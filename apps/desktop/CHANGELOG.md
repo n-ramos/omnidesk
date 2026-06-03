@@ -8,6 +8,16 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.1.5] - 2026-06-03
+
+### Corrige
+
+- Deverrouillage par Touch ID sur l'app installee (DMG) : il pouvait echouer avec un
+  message technique ("failed to downcast any to object") au lieu de basculer proprement
+  sur le mot de passe maitre. L'app reinitialise desormais sans erreur le cache
+  biometrique devenu illisible et repropose d'activer Touch ID ; l'acces au coffre n'est
+  plus bloque.
+
 ## [0.1.4] - 2026-06-03
 
 ### Ajoute
