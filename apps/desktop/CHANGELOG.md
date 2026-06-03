@@ -8,6 +8,20 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.2.0] - 2026-06-03
+
+### Ajoute
+
+- Assistant IA "Elodie" : renseignez une cle OpenAI (ChatGPT) dans les reglages, puis
+  cliquez sur Elodie pour ouvrir une bulle de conversation et lui poser vos questions. La
+  cle est chiffree et reste sur votre ordinateur (elle n'est transmise qu'a OpenAI).
+- Elodie peut consulter et gerer vos mails sur demande : lister vos messages, retrouver un
+  dossier, rediger et envoyer un mail, marquer comme lu, deplacer ou supprimer. Toute action
+  qui modifie quelque chose (envoi, deplacement, suppression...) demande d'abord votre
+  confirmation, avec un apercu de ce qui va etre fait.
+- Dictee vocale : un bouton micro dans la bulle permet de parler a Elodie ; votre voix est
+  transcrite en texte automatiquement.
+
 ## [0.1.7] - 2026-06-03
 
 ### Corrige

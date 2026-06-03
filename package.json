@@ -1,6 +1,6 @@
 {
   "name": "omnidesk",
-  "version": "0.1.7",
+  "version": "0.2.0",
   "private": true,
   "description": "Local-first unified desktop inbox for email and workplace messaging.",
   "packageManager": "pnpm@9.15.4",
