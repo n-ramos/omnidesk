@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, Menu, powerMonitor, protocol, screen, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, Menu, powerMonitor, protocol, screen, session, shell } from 'electron'
 import { join } from 'node:path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { appConfig } from '@main/config/env'
@@ -342,7 +342,28 @@ app.whenReady().then(() => {
     },
   })
 
-  const db = databaseClient.open()
+  // Ouvrir la base est vital : si ca echoue, registerIpcHandlers n'est jamais atteint et TOUS les
+  // canaux IPC repondent "No handler registered ..." de maniere opaque (typiquement quand la cle de
+  // chiffrement n'est plus dechiffrable par le trousseau apres un changement d'identite de l'app).
+  // On echoue donc franchement, avec un message clair, plutot que de laisser l'app a moitie demarree.
+  let db: ReturnType<typeof databaseClient.open>
+  try {
+    db = databaseClient.open()
+  } catch (error) {
+    logger.error("Demarrage interrompu : impossible d'ouvrir la base de donnees", error)
+    dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Omnidesk',
+      message: "Impossible d'ouvrir la base de donnees.",
+      detail:
+        "La cle de chiffrement locale n'a pas pu etre lue dans le trousseau du systeme. Cela " +
+        "survient si l'identite de l'application (nom ou signature) a change depuis la derniere " +
+        "ouverture. Verifiez l'acces au trousseau, ou reinitialisez les donnees locales de l'app.",
+      buttons: ['Quitter'],
+    })
+    app.quit()
+    return
+  }
   reminderScheduler = new ReminderScheduler(db)
   passVaultService = new PassVaultService(db)
   registerIpcHandlers(syncEngine, reminderScheduler, passVaultService)

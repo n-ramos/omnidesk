@@ -1,6 +1,7 @@
 {
   "name": "@omnidesk/desktop",
-  "version": "0.1.0",
+  "productName": "Omnidesk",
+  "version": "0.1.1",
   "private": true,
   "description": "Omnidesk desktop application.",
   "author": "Omnidesk",
