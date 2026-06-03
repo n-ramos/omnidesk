@@ -131,11 +131,18 @@ const pollMediaSnapshot = async (): Promise<void> => {
   }
 }
 
+// Identite du webview deja equipe : evite d'empiler les ecouteurs si cette fonction est
+// rappelee sur le meme element (changement de compte sur une instance reutilisee, ou
+// rechargement a chaud en dev) -> sinon fuite EventEmitter "N did-stop-loading listeners".
+// Un element re-cree (nouvelle identite) est re-equipe normalement.
+let listenersBoundTo: WebpageWebviewElement | null = null
+
 const attachWebviewListeners = (): void => {
   const webview = webviewRef.value
-  if (!webview) {
+  if (!webview || listenersBoundTo === webview) {
     return
   }
+  listenersBoundTo = webview
 
   webview.addEventListener('did-start-loading', () => {
     isLoading.value = true

@@ -61,11 +61,18 @@ const normalizeUrl = (raw: string): string | undefined => {
   }
 }
 
+// Identite du webview deja equipe : le watch ci-dessous se redeclenche a chaque changement
+// d'URL alors que l'element <webview> reste le meme (pas de :key), donc sans cette garde les
+// ecouteurs s'empileraient (fuite EventEmitter "N did-stop-loading listeners"). Un element
+// re-cree (nouvelle identite) est re-equipe normalement.
+let listenersBoundTo: WebviewElement | null = null
+
 const attachListeners = (): void => {
   const webview = webviewRef.value
-  if (!webview) {
+  if (!webview || listenersBoundTo === webview) {
     return
   }
+  listenersBoundTo = webview
   webview.addEventListener('did-start-loading', () => {
     isLoading.value = true
     errorMessage.value = undefined
