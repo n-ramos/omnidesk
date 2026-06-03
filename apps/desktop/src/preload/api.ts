@@ -54,6 +54,7 @@ export interface OmnideskApi {
     getUpdateStatus: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_GET_UPDATE_STATUS]>
     checkForUpdates: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_CHECK_UPDATES]>
     installUpdate: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_INSTALL_UPDATE]>
+    getChangelog: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_GET_CHANGELOG]>
   }
   providers: {
     list: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.PROVIDERS_LIST]>
@@ -582,6 +583,7 @@ export const omnideskApi: OmnideskApi = {
     getUpdateStatus: () => invoke(IPC_CHANNELS.APP_GET_UPDATE_STATUS, undefined),
     checkForUpdates: () => invoke(IPC_CHANNELS.APP_CHECK_UPDATES, undefined),
     installUpdate: () => invoke(IPC_CHANNELS.APP_INSTALL_UPDATE, undefined),
+    getChangelog: () => invoke(IPC_CHANNELS.APP_GET_CHANGELOG, undefined),
   },
   providers: {
     list: () => invoke(IPC_CHANNELS.PROVIDERS_LIST, undefined),

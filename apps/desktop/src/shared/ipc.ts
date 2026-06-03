@@ -64,6 +64,7 @@ export const IPC_CHANNELS = {
   APP_GET_UPDATE_STATUS: 'app:get-update-status',
   APP_CHECK_UPDATES: 'app:check-updates',
   APP_INSTALL_UPDATE: 'app:install-update',
+  APP_GET_CHANGELOG: 'app:get-changelog',
   PROVIDERS_LIST: 'providers:list',
   ACCOUNTS_LIST: 'accounts:list',
   ACCOUNTS_CREATE_DRAFT: 'accounts:create-draft',
@@ -268,6 +269,7 @@ export interface IpcRequestMap {
   [IPC_CHANNELS.APP_GET_UPDATE_STATUS]: undefined
   [IPC_CHANNELS.APP_CHECK_UPDATES]: undefined
   [IPC_CHANNELS.APP_INSTALL_UPDATE]: undefined
+  [IPC_CHANNELS.APP_GET_CHANGELOG]: undefined
   [IPC_CHANNELS.PROVIDERS_LIST]: undefined
   [IPC_CHANNELS.ACCOUNTS_LIST]: undefined
   [IPC_CHANNELS.ACCOUNTS_CREATE_DRAFT]: CreateDraftAccountInput
@@ -531,6 +533,7 @@ export interface IpcResponseMap {
   [IPC_CHANNELS.APP_GET_UPDATE_STATUS]: AppUpdateStatus
   [IPC_CHANNELS.APP_CHECK_UPDATES]: { ok: true }
   [IPC_CHANNELS.APP_INSTALL_UPDATE]: { ok: true }
+  [IPC_CHANNELS.APP_GET_CHANGELOG]: ChangelogEntry[]
   [IPC_CHANNELS.PROVIDERS_LIST]: ProviderDescriptor[]
   [IPC_CHANNELS.ACCOUNTS_LIST]: AccountSummary[]
   [IPC_CHANNELS.ACCOUNTS_CREATE_DRAFT]: AccountSummary
@@ -747,3 +750,19 @@ export type AppUpdateStatus =
   | { phase: 'downloading'; percent: number }
   | { phase: 'downloaded'; version: string }
   | { phase: 'error'; message: string }
+
+/** Un groupe de lignes sous une version du changelog (sous-titre Keep a Changelog optionnel). */
+export interface ChangelogGroup {
+  label: string | null
+  items: string[]
+}
+
+/**
+ * Une version parsee depuis CHANGELOG.md (lu cote main). Sert a la modal affichee une
+ * seule fois apres une mise a jour, pour montrer ce qui a change.
+ */
+export interface ChangelogEntry {
+  version: string
+  date: string | null
+  groups: ChangelogGroup[]
+}

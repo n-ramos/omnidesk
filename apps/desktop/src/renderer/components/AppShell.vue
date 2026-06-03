@@ -24,6 +24,7 @@ import MediaPlayer from '@renderer/components/MediaPlayer.vue'
 import SettingsView from '@renderer/components/SettingsView.vue'
 import OmniHowlMascot from '@renderer/components/mascot/OmniHowlMascot.vue'
 import ConfirmDialog from '@renderer/components/ui/ConfirmDialog.vue'
+import ChangelogModal from '@renderer/components/ChangelogModal.vue'
 import Spinner from '@renderer/components/ui/Spinner.vue'
 import { useAppStore } from '@renderer/stores/appStore'
 import { useOmnichatStore } from '@renderer/stores/omnichatStore'
@@ -170,6 +171,7 @@ onMounted(() => {
     <AddAccountDialog />
     <ComposeMailDialog />
     <ConfirmDialog />
+    <ChangelogModal />
     <CallOverlay />
     <IncomingCallDialog />
 
