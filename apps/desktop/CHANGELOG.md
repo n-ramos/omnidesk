@@ -8,6 +8,27 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.6.0] - 2026-06-04
+
+### Ajoute
+
+- Selection des peripheriques audio et video pendant un appel (et hors appel) : un nouveau
+  bouton engrenage ouvre une fenetre pour choisir le microphone, la sortie audio et la camera,
+  avec un vu-metre en direct pour tester ton micro et un bouton pour tester la sortie audio.
+  Tes choix sont memorises pour les appels suivants et appliques immediatement pendant
+  l'appel en cours.
+- L'icone GitHub est desormais affichee avec tes autres applications dans la barre laterale
+  et peut etre deplacee par glisser-deposer, comme les autres comptes.
+
+### Modifie
+
+- L'effet Larsen en appel (entendre sa propre voix renvoyee) est nettement reduit : l'annulation
+  d'echo, la suppression de bruit et le controle de gain sont desormais explicitement actifs sur
+  le microphone, sans dependre des reglages par defaut du systeme.
+- Ajouter Slack, Teams ou Outlook depuis la page d'accueil ou la fenetre d'ajout de service
+  demande maintenant une confirmation, pour eviter qu'un clic accidentel sur une tuile ne cree
+  un compte sans le vouloir.
+
 ## [0.5.0] - 2026-06-04
 
 ### Ajoute
