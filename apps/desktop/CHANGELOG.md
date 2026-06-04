@@ -8,6 +8,31 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.3.0] - 2026-06-04
+
+### Ajoute
+
+- Elodie peut desormais gerer votre accueil sur simple demande : pense-betes (rappels), taches
+  a faire, notes, meteo, flux RSS, compte a rebours... Chaque action qui modifie quelque chose
+  vous demande d'abord confirmation, avec un apercu.
+- Quand l'assistant est configure, Elodie propose des exemples de commandes a essayer ; un clic
+  sur l'astuce ouvre la conversation.
+- L'assistant est accessible depuis le rail lateral (icone dediee), en plus de la mascotte.
+
+### Modifie
+
+- Reglages reorganises en categories (Apparence, Assistant, Comptes, Donnees...) pour s'y
+  retrouver plus vite.
+- La bulle de conversation d'Elodie est desormais deplacable et redimensionnable.
+- La dictee vocale s'arrete automatiquement apres un silence (plus besoin de recliquer sur le
+  micro).
+- Un message clair s'affiche dans la conversation quand aucune cle n'est encore configuree.
+
+### Corrige
+
+- Les actions de l'assistant (mails, etc.) fonctionnent de nouveau : certains noms d'outils
+  etaient refuses par le fournisseur, ce qui empechait l'assistant d'agir.
+
 ## [0.2.1] - 2026-06-04
 
 ### Modifie
