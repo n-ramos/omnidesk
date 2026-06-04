@@ -8,6 +8,14 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.5.0] - 2026-06-04
+
+### Ajoute
+
+- Provider GitHub : connexion OAuth via OmniProxy pour suivre vos pull requests, demandes de
+  review, depots recents et runs GitHub Actions depuis une vue dediee dans Omnidesk, sans
+  exposer de secret GitHub dans l'application.
+
 ## [0.4.0] - 2026-06-04
 
 ### Ajoute
