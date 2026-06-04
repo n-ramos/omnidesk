@@ -12,7 +12,12 @@ import type {
   MailAutodiscoverResult,
   MailSocketType,
 } from '@shared/models'
-import { WEB_SERVICE_PRESETS, type WebServicePreset } from '@shared/webServices'
+import {
+  APP_SERVICE_PRESETS,
+  WEB_SERVICE_PRESETS,
+  type AppServicePreset,
+  type WebServicePreset,
+} from '@shared/webServices'
 
 const store = useAppStore()
 
@@ -117,6 +122,10 @@ const submitWebpageConnect = async (): Promise<void> => {
 // l'URL du service. L'authentification se fait dans la page, session isolee par compte.
 const connectWebService = async (preset: WebServicePreset): Promise<void> => {
   await store.connectWebpageAccount({ label: preset.label, url: preset.url })
+}
+
+const connectAppService = async (preset: AppServicePreset): Promise<void> => {
+  await store.connectProvider(preset.id)
 }
 
 const selectedProvider = computed(() =>
@@ -390,6 +399,25 @@ const toggleAdvanced = (): void => {
             </span>
           </div>
           <StatusBadge tone="success">Mode web</StatusBadge>
+        </button>
+
+        <button
+          v-for="service in APP_SERVICE_PRESETS"
+          :key="service.id"
+          class="flex items-center justify-between rounded-xl bg-white/[0.04] p-4 text-left transition hover:bg-white/[0.07]"
+          type="button"
+          @click="connectAppService(service)"
+        >
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="grid size-11 place-items-center rounded-xl bg-white/[0.055] text-zinc-100">
+              <ProviderLogo :provider-id="service.id" :size="19" />
+            </span>
+            <span class="min-w-0">
+              <span class="block text-sm font-semibold text-zinc-100">{{ service.label }}</span>
+              <span class="mt-1 block text-sm text-zinc-500">{{ service.description }}</span>
+            </span>
+          </div>
+          <StatusBadge tone="success">{{ service.badge }}</StatusBadge>
         </button>
       </div>
 

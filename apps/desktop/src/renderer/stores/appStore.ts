@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { errorMessage } from '@shared/errors'
 import { useBrowserStore } from '@renderer/stores/browserStore'
+import { useGithubStore } from '@renderer/stores/githubStore'
 import { useOmnichatStore } from '@renderer/stores/omnichatStore'
 import { readStoredAccent } from '@renderer/utils/accentColor'
 import { readStoredBase } from '@renderer/utils/baseColor'
@@ -47,6 +48,7 @@ export type AppView =
   | 'browser'
   | 'omnichat'
   | 'omnipass'
+  | 'github'
 
 const startupToAppView = (view: StartupView): AppView => {
   switch (view) {
@@ -175,6 +177,7 @@ const providerPriority: Record<ProviderKind, number> = {
   imap: 3,
   webpage: 4,
   omnichat: 5,
+  github: 6,
 }
 
 const sortProviders = (providers: ProviderDescriptor[]): ProviderDescriptor[] =>
@@ -898,6 +901,13 @@ export const useAppStore = defineStore('app', {
 
       if (providerId === 'webpage') {
         this.accountWorkflowStep = 'webpage-form'
+        return
+      }
+
+      if (providerId === 'github') {
+        this.closeAccountWorkflow()
+        this.setView('github')
+        void useGithubStore().init()
         return
       }
 

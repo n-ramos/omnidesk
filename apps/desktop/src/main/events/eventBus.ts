@@ -21,6 +21,7 @@ import type {
   AiToolStartEvent,
 } from '@shared/ai'
 import type { AuthStatus } from '@shared/auth'
+import type { GithubLinkEvent } from '@shared/github'
 
 interface AppEventMap {
   'notification:created': LocalNotification
@@ -52,6 +53,9 @@ interface AppEventMap {
   // Session du compte OmniProxy (mode accounts) : etat de connexion change (login,
   // logout, refresh, purge sur refresh invalide) -> le renderer met a jour le gate.
   'account:session': AuthStatus
+  // Provider GitHub : retour du flux OAuth (deep link omnidesk://github/connected) ->
+  // le renderer rafraichit son statut / tableau de bord GitHub.
+  'github:link': GithubLinkEvent
 }
 
 type AppEventName = keyof AppEventMap

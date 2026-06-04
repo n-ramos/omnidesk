@@ -71,6 +71,7 @@ import type {
   AuthStatus,
   ResendVerificationResult,
 } from './auth'
+import type { GithubStatus, GithubSummary } from './github'
 
 export const IPC_CHANNELS = {
   APP_GET_BOOTSTRAP: 'app:get-bootstrap',
@@ -264,6 +265,10 @@ export const IPC_CHANNELS = {
   AI_CHAT_CANCEL: 'ai:chat-cancel',
   AI_CONFIRM: 'ai:confirm',
   AI_TRANSCRIBE: 'ai:transcribe',
+  GITHUB_GET_STATUS: 'github:get-status',
+  GITHUB_CONNECT: 'github:connect',
+  GITHUB_DISCONNECT: 'github:disconnect',
+  GITHUB_GET_SUMMARY: 'github:get-summary',
 } as const
 
 export const PRELOAD_EVENTS = {
@@ -296,6 +301,8 @@ export const PRELOAD_EVENTS = {
   // Session du compte OmniProxy : etat (unconfigured/unauthenticated/authenticated) pousse
   // a chaque changement (login, logout, refresh, purge) -> le renderer met a jour le gate.
   AUTH_STATE: 'auth:state',
+  // Provider GitHub : retour du flux OAuth (deep link) -> le renderer rafraichit son statut.
+  GITHUB_LINK: 'github:link',
 } as const
 
 // Source unique des actions de raccourci : voir shortcuts.ts (re-export pour
@@ -587,6 +594,10 @@ export interface IpcRequestMap {
     editedArguments?: Record<string, unknown>
   }
   [IPC_CHANNELS.AI_TRANSCRIBE]: { audio: Uint8Array; mimeType: string }
+  [IPC_CHANNELS.GITHUB_GET_STATUS]: undefined
+  [IPC_CHANNELS.GITHUB_CONNECT]: undefined
+  [IPC_CHANNELS.GITHUB_DISCONNECT]: undefined
+  [IPC_CHANNELS.GITHUB_GET_SUMMARY]: { limit?: number } | undefined
 }
 
 export interface IpcResponseMap {
@@ -785,6 +796,10 @@ export interface IpcResponseMap {
   [IPC_CHANNELS.AI_CHAT_CANCEL]: { ok: true }
   [IPC_CHANNELS.AI_CONFIRM]: { ok: true }
   [IPC_CHANNELS.AI_TRANSCRIBE]: { text: string }
+  [IPC_CHANNELS.GITHUB_GET_STATUS]: GithubStatus
+  [IPC_CHANNELS.GITHUB_CONNECT]: { ok: true }
+  [IPC_CHANNELS.GITHUB_DISCONNECT]: { ok: true }
+  [IPC_CHANNELS.GITHUB_GET_SUMMARY]: GithubSummary
 }
 
 // Evenement pousse main -> renderer quand le coffre est verrouille (manuel ou auto-lock).

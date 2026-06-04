@@ -1,23 +1,28 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Bot, Compass, House, KeyRound, Plus, Settings, Unplug, Video, Volume2, VolumeX } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Bot, Compass, Github, House, KeyRound, Plus, Settings, Unplug, Video, Volume2, VolumeX } from 'lucide-vue-next'
 import ProviderLogo from '@renderer/components/ui/ProviderLogo.vue'
 import { confirm } from '@renderer/composables/useConfirm'
 import { useOmnichat } from '@renderer/composables/useOmnichat'
 import { webpageController } from '@renderer/services/webpageController'
 import { useAppStore } from '@renderer/stores/appStore'
+import { useGithubStore } from '@renderer/stores/githubStore'
 import type { WebpageMediaState } from '@renderer/stores/appStore'
 import { useAiChatStore } from '@renderer/stores/aiChatStore'
+import { useSessionStore } from '@renderer/stores/sessionStore'
 import type { AccountSummary } from '@shared/models'
 
 const store = useAppStore()
 const omnichat = useOmnichat()
 const chat = useAiChatStore()
+const session = useSessionStore()
+const github = useGithubStore()
 
 // Tuiles du rail = slots cibles par les raccourcis Cmd/Ctrl+1..9 (getter partage avec
 // l'appStore). Le compte "self" omnichat, ancrage interne, en est deja exclu.
 const accounts = computed(() => store.slotAccounts)
 const unreadByAccount = computed(() => store.unreadByAccount)
+const showGithubService = computed(() => store.activeView === 'github' || github.connected)
 
 // Drag & drop pour reordonner les comptes dans le rail.
 // On garde une copie locale reordonnable pendant le glissement (retour visuel immediat),
@@ -141,6 +146,22 @@ const onKeydown = (event: KeyboardEvent): void => {
 document.addEventListener('mousedown', onDocumentMousedown)
 document.addEventListener('keydown', onKeydown)
 
+onMounted(() => {
+  void session.init()
+})
+
+watch(
+  () => session.isAuthenticated,
+  (authenticated) => {
+    if (authenticated) {
+      void github.init()
+    } else {
+      github.reset()
+    }
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocumentMousedown)
   document.removeEventListener('keydown', onKeydown)
@@ -249,6 +270,21 @@ const formatBadge = (count: number): string => (count > 99 ? '99+' : String(coun
       @click="store.setView('omnipass')"
     >
       <KeyRound :size="18" />
+    </button>
+
+    <button
+      v-if="showGithubService"
+      class="app-no-drag grid size-10 place-items-center rounded-xl transition"
+      :class="
+        store.activeView === 'github'
+          ? 'bg-white/[0.12] text-accent-mint shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
+          : 'text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100'
+      "
+      title="GitHub"
+      type="button"
+      @click="store.setView('github')"
+    >
+      <Github :size="18" />
     </button>
 
     <button

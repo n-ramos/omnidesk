@@ -31,6 +31,15 @@ export type AppErrorCode =
   | 'ACCOUNT_RESET_INVALID'
   // Trop de tentatives (429) sur la verification.
   | 'ACCOUNT_RATE_LIMITED'
+  // --- Provider GitHub (lien OAuth via OmniProxy) ---
+  // Aucun compte GitHub lie a ce compte OmniProxy -> proposer "Connecter GitHub".
+  | 'GITHUB_NOT_LINKED'
+  // Token GitHub revoque/expire cote proxy -> proposer de reconnecter GitHub.
+  | 'GITHUB_AUTH_FAILED'
+  // Scope GitHub insuffisant pour l'action demandee.
+  | 'GITHUB_FORBIDDEN'
+  // Quota GitHub atteint (details.resetAt eventuel).
+  | 'GITHUB_RATE_LIMITED'
 
 export class AppError extends Error {
   constructor(

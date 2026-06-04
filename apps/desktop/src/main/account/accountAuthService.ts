@@ -42,6 +42,10 @@ const REFRESH_SKEW_MS = 5 * 60 * 1000
 const FALLBACK_REFRESH_MS = 55 * 60 * 1000
 // Plancher : ne jamais (re)programmer un refresh quasi immediat (anti-boucle).
 const MIN_REFRESH_DELAY_MS = 10 * 1000
+// Node borne les timers a un entier signe 32 bits. Au-dela, il force le delai a 1 ms
+// et peut provoquer une boucle de refresh agressive.
+const MAX_REFRESH_DELAY_MS = 2_147_483_647
+const RATE_LIMIT_RETRY_FALLBACK_MS = 60 * 1000
 
 // Service d'authentification par COMPTE (mode accounts d'OmniProxy). Detient la session
 // en memoire (jeton d'acces courant) et la persiste chiffree (accountSessionVault).
@@ -378,13 +382,15 @@ class AccountAuthService {
     eventBus.emit('account:session', this.status())
   }
 
-  private scheduleRefresh(accessToken: string): void {
+  private scheduleRefresh(accessToken: string, retryAfterMs?: number): void {
     this.stop()
     const exp = this.jwtExpiryMs(accessToken)
-    const delay =
-      exp != null
-        ? Math.max(MIN_REFRESH_DELAY_MS, exp - Date.now() - REFRESH_SKEW_MS)
-        : FALLBACK_REFRESH_MS
+    const delay = this.normalizeRefreshDelay(
+      retryAfterMs ??
+        (exp != null
+          ? exp - Date.now() - REFRESH_SKEW_MS
+          : FALLBACK_REFRESH_MS),
+    )
     this.refreshTimer = setTimeout(() => {
       void this.refreshNow().catch((error) => {
         if (error instanceof AppError && error.code === 'ACCOUNT_AUTH_FAILED') {
@@ -395,10 +401,28 @@ class AccountAuthService {
           error: errorMessage(error, 'refresh echoue'),
         })
         if (this.session) {
-          this.scheduleRefresh(this.session.accessToken)
+          this.scheduleRefresh(this.session.accessToken, this.retryDelayAfterFailure(error))
         }
       })
     }, delay)
+  }
+
+  private normalizeRefreshDelay(delayMs: number): number {
+    if (!Number.isFinite(delayMs)) {
+      return FALLBACK_REFRESH_MS
+    }
+    return Math.min(MAX_REFRESH_DELAY_MS, Math.max(MIN_REFRESH_DELAY_MS, Math.floor(delayMs)))
+  }
+
+  private retryDelayAfterFailure(error: unknown): number {
+    if (error instanceof AppError && error.code === 'ACCOUNT_RATE_LIMITED') {
+      const retryAfterMs = error.details?.retryAfterMs
+      if (typeof retryAfterMs === 'number') {
+        return this.normalizeRefreshDelay(retryAfterMs)
+      }
+      return RATE_LIMIT_RETRY_FALLBACK_MS
+    }
+    return RATE_LIMIT_RETRY_FALLBACK_MS
   }
 
   // exp (ms) du JWT, par simple LECTURE du payload (aucune verification de signature :
@@ -490,6 +514,14 @@ class AccountAuthService {
     }
     if (status === 401 || code === 'INVALID_CREDENTIALS' || code === 'INVALID_REFRESH') {
       return new AppError('ACCOUNT_AUTH_FAILED', 'Email ou mot de passe incorrect.')
+    }
+    if (status === 429 || code === 'TOO_MANY_ATTEMPTS' || code === 'RATE_LIMITED') {
+      const retryAfterMs = error?.details?.retryAfterMs
+      return new AppError(
+        'ACCOUNT_RATE_LIMITED',
+        error?.message ?? 'Trop de tentatives. Reessaie dans un moment.',
+        typeof retryAfterMs === 'number' ? { retryAfterMs } : undefined,
+      )
     }
     if (status === 400 || code === 'VALIDATION_FAILED') {
       return new AppError('VALIDATION_FAILED', 'Saisie invalide : verifiez l\'email et le mot de passe (8 caracteres minimum).')
