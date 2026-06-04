@@ -6,12 +6,14 @@ import {
   Maximize2,
   MonitorUp,
   PhoneOff,
+  Settings,
   ShieldCheck,
   Users,
   Video,
 } from 'lucide-vue-next'
 import BaseButton from '@renderer/components/ui/BaseButton.vue'
 import StatusBadge from '@renderer/components/ui/StatusBadge.vue'
+import CallMediaSettingsDialog from '@renderer/components/CallMediaSettingsDialog.vue'
 import { openCallOverlay } from '@renderer/composables/useCallOverlay'
 import { useOmnichat } from '@renderer/composables/useOmnichat'
 import { useSessionStore } from '@renderer/stores/sessionStore'
@@ -38,6 +40,9 @@ onMounted(async () => {
   }
 })
 
+// Dialog de selection des peripheriques audio/video + test micro (utilisable hors appel).
+const showMediaSettings = ref(false)
+
 const resume = (): void => {
   openCallOverlay()
 }
@@ -54,15 +59,25 @@ const features = [
 </script>
 
 <template>
-  <section class="min-h-0 flex-1 overflow-auto p-5">
-    <header class="mb-5 flex items-center justify-between">
+  <section class="relative min-h-0 flex-1 overflow-auto p-5">
+    <header class="mb-5 flex items-center justify-between gap-3">
       <div>
         <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
           Omnichat
         </p>
         <h2 class="mt-1 text-xl font-semibold text-white">Centre d'appels</h2>
       </div>
-      <StatusBadge
+      <div class="flex items-center gap-2">
+        <button
+          class="grid size-9 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+          :class="{ 'bg-white/[0.08] text-white': showMediaSettings }"
+          title="Peripheriques audio/video"
+          type="button"
+          @click="showMediaSettings = true"
+        >
+          <Settings :size="18" />
+        </button>
+        <StatusBadge
         :tone="
           needsLogin
             ? 'neutral'
@@ -82,7 +97,8 @@ const features = [
                 ? 'Indisponible'
                 : 'Verification...'
         }}
-      </StatusBadge>
+        </StatusBadge>
+      </div>
     </header>
 
     <!-- Appel en cours : seul point de retour quand l'overlay a ete reduit. -->
@@ -170,5 +186,10 @@ const features = [
         </p>
       </div>
     </div>
+
+    <CallMediaSettingsDialog
+      :open="showMediaSettings"
+      @close="showMediaSettings = false"
+    />
   </section>
 </template>
