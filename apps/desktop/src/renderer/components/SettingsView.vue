@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import type { Component } from 'vue'
 import {
   Bell,
   Bird,
@@ -468,17 +469,58 @@ const onBaseHexCommit = (): void => {
 const resetBase = (): void => {
   commitBase(DEFAULT_BASE)
 }
+
+// --- Categories de reglages (navigation par onglets) -------------------------
+type SettingsCategory = 'general' | 'apparence' | 'assistant' | 'comptes' | 'donnees'
+
+const SETTINGS_CATEGORIES: Array<{ id: SettingsCategory; label: string; icon: Component }> = [
+  { id: 'general', label: 'General', icon: MonitorCog },
+  { id: 'apparence', label: 'Apparence', icon: Palette },
+  { id: 'assistant', label: 'Assistant', icon: Bot },
+  { id: 'comptes', label: 'Comptes', icon: Users },
+  { id: 'donnees', label: 'Donnees', icon: Database },
+]
+
+const activeCategory = ref<SettingsCategory>('general')
+const isCat = (category: SettingsCategory): boolean => activeCategory.value === category
+const activeCategoryLabel = computed(
+  () => SETTINGS_CATEGORIES.find((category) => category.id === activeCategory.value)?.label ?? '',
+)
 </script>
 
 <template>
-  <section class="min-h-0 flex-1 overflow-auto p-5">
-    <header class="mb-5">
-      <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Reglages</p>
-      <h2 class="mt-1 text-xl font-semibold text-white">Etat de l'application</h2>
-    </header>
+  <section class="flex min-h-0 flex-1 overflow-hidden">
+    <!-- Volet des categories : navigation des reglages -->
+    <nav class="flex w-44 shrink-0 flex-col gap-1 overflow-y-auto border-r border-white/[0.06] p-3">
+      <p class="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        Reglages
+      </p>
+      <button
+        v-for="category in SETTINGS_CATEGORIES"
+        :key="category.id"
+        type="button"
+        class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition"
+        :class="
+          isCat(category.id)
+            ? 'bg-white/[0.08] font-medium text-white'
+            : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200'
+        "
+        @click="activeCategory = category.id"
+      >
+        <component
+          :is="category.icon"
+          :size="16"
+          :class="isCat(category.id) ? 'text-accent-mint' : ''"
+        />
+        {{ category.label }}
+      </button>
+    </nav>
 
-    <div class="grid gap-4">
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+    <!-- Contenu de la categorie selectionnee -->
+    <div class="min-h-0 flex-1 overflow-auto p-5">
+      <h2 class="mb-5 text-xl font-semibold text-white">{{ activeCategoryLabel }}</h2>
+      <div class="grid gap-4">
+      <div v-show="isCat('general')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <HomeIcon class="text-accent-mint" :size="19" />
           <h3 class="text-sm font-semibold text-white">Demarrage</h3>
@@ -521,7 +563,7 @@ const resetBase = (): void => {
         </div>
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-2">
+      <div v-show="isCat('apparence')" class="grid gap-4 lg:grid-cols-2">
         <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
           <div class="mb-3 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
@@ -743,7 +785,7 @@ const resetBase = (): void => {
         </div>
       </div>
 
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div v-show="isCat('general')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center justify-between gap-3">
           <div class="flex items-center gap-3">
             <Keyboard class="text-accent-mint" :size="19" />
@@ -798,7 +840,7 @@ const resetBase = (): void => {
         <p v-if="navShortcutError" class="mt-2 text-xs text-accent-coral">{{ navShortcutError }}</p>
       </div>
 
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div v-show="isCat('assistant')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <Bird class="text-accent-mint" :size="19" />
           <h3 class="text-sm font-semibold text-white">Elodie</h3>
@@ -852,7 +894,7 @@ const resetBase = (): void => {
         </div>
       </div>
 
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div v-show="isCat('assistant')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <Bot class="text-accent-mint" :size="19" />
           <h3 class="text-sm font-semibold text-white">Assistant IA</h3>
@@ -862,7 +904,7 @@ const resetBase = (): void => {
           conversation. Votre cle est chiffree et ne quitte jamais cet ordinateur (sauf vers OpenAI).
         </p>
 
-        <div class="flex items-center justify-between gap-3 rounded-xl bg-ink-950/55 p-3">
+        <div class="flex max-w-xl items-center justify-between gap-3 rounded-xl bg-ink-950/55 p-3">
           <span class="min-w-0">
             <span class="block text-sm font-semibold text-zinc-100">Activer l'assistant</span>
             <span class="mt-0.5 block text-xs leading-5 text-zinc-500">
@@ -885,7 +927,7 @@ const resetBase = (): void => {
           </button>
         </div>
 
-        <div class="mt-2 rounded-xl bg-ink-950/55 p-3">
+        <div class="mt-2 max-w-xl rounded-xl bg-ink-950/55 p-3">
           <div class="flex items-center justify-between gap-2">
             <span class="text-sm font-semibold text-zinc-100">Cle API OpenAI</span>
             <span
@@ -927,7 +969,7 @@ const resetBase = (): void => {
           </p>
         </div>
 
-        <div class="mt-2 rounded-xl bg-ink-950/55 p-3">
+        <div class="mt-2 max-w-xl rounded-xl bg-ink-950/55 p-3">
           <label class="block text-sm font-semibold text-zinc-100" for="ai-model">Modele</label>
           <input
             id="ai-model"
@@ -957,7 +999,11 @@ const resetBase = (): void => {
         </div>
       </div>
 
-      <div v-if="store.accounts.length > 0" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div
+        v-if="store.accounts.length > 0"
+        v-show="isCat('comptes')"
+        class="rounded-2xl bg-white/[0.04] p-4 shadow-line"
+      >
         <div class="mb-3 flex items-center gap-3">
           <Users class="text-accent-mint" :size="19" />
           <h3 class="text-sm font-semibold text-white">Comptes connectes</h3>
@@ -1012,7 +1058,7 @@ const resetBase = (): void => {
         </div>
       </div>
 
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div v-show="isCat('donnees')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <Database class="text-accent-sky" :size="19" />
           <h3 class="text-sm font-semibold text-white">Emplacement des donnees</h3>
@@ -1022,7 +1068,7 @@ const resetBase = (): void => {
         </p>
       </div>
 
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div v-show="isCat('donnees')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <Download class="text-accent-mint" :size="19" />
           <h3 class="text-sm font-semibold text-white">Sauvegarde et restauration</h3>
@@ -1053,7 +1099,7 @@ const resetBase = (): void => {
         <p v-if="store.error" class="mt-3 text-xs text-accent-coral">{{ store.error }}</p>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div v-show="isCat('donnees')" class="grid grid-cols-2 gap-4">
         <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
           <ShieldCheck class="mb-4 text-accent-mint" :size="20" />
           <p class="text-sm font-semibold text-white">Protection active</p>
@@ -1068,7 +1114,7 @@ const resetBase = (): void => {
         </div>
       </div>
 
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div v-show="isCat('comptes')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <MonitorCog class="text-accent-lilac" :size="19" />
           <h3 class="text-sm font-semibold text-white">Services disponibles</h3>
@@ -1095,7 +1141,11 @@ const resetBase = (): void => {
         </div>
       </div>
 
-      <div v-if="connectedAccounts.length > 1" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div
+        v-if="connectedAccounts.length > 1"
+        v-show="isCat('comptes')"
+        class="rounded-2xl bg-white/[0.04] p-4 shadow-line"
+      >
         <div class="mb-3 flex items-center gap-3">
           <LogOut class="text-zinc-400" :size="19" />
           <h3 class="text-sm font-semibold text-white">Tout synchroniser</h3>
@@ -1110,12 +1160,13 @@ const resetBase = (): void => {
         </BaseButton>
       </div>
 
-      <div class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+      <div v-show="isCat('general')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
         <div class="mb-3 flex items-center gap-3">
           <PackageCheck class="text-accent-mint" :size="19" />
           <h3 class="text-sm font-semibold text-white">Version</h3>
         </div>
         <p class="text-sm leading-6 text-zinc-400">Omnidesk {{ store.localStatus?.appVersion }}</p>
+      </div>
       </div>
     </div>
   </section>

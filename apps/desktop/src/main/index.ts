@@ -41,6 +41,7 @@ let stopAiErrorBridge: (() => void) | undefined
 let stopAiToolStartBridge: (() => void) | undefined
 let stopAiToolEndBridge: (() => void) | undefined
 let stopAiConfirmRequestBridge: (() => void) | undefined
+let stopHomeUpdatedBridge: (() => void) | undefined
 // Id du rebond du dock macOS declenche par un appel entrant (annule a la fin).
 let incomingCallBounceId: number | null = null
 
@@ -474,6 +475,9 @@ app.whenReady().then(() => {
   stopAiConfirmRequestBridge = eventBus.on('ai:confirm-request', (payload) =>
     sendAiEvent(PRELOAD_EVENTS.AI_CONFIRM_REQUEST, payload),
   )
+  stopHomeUpdatedBridge = eventBus.on('home:updated', (payload) =>
+    sendAiEvent(PRELOAD_EVENTS.HOME_UPDATED, payload),
+  )
   // Verrouillage du coffre a la mise en veille et au verrouillage de session OS. L'auto-lock par
   // inactivite (cote service) reste le filet principal. Le verrouillage sur simple perte de focus
   // est volontairement ecarte en M0 : trop agressif tant que le deverrouillage biometrique (M3)
@@ -515,6 +519,7 @@ app.on('before-quit', () => {
   stopAiToolStartBridge?.()
   stopAiToolEndBridge?.()
   stopAiConfirmRequestBridge?.()
+  stopHomeUpdatedBridge?.()
   signalingClient.stop()
   syncEngine.stop()
   reminderScheduler?.stop()

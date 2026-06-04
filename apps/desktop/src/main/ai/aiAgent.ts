@@ -27,7 +27,10 @@ const SYSTEM_PROMPT = [
   'afin d\'obtenir son conversationId. Toute action qui modifie quelque chose (envoyer un mail,',
   'marquer lu, deplacer, supprimer) demande une confirmation a l\'utilisateur : annonce ton',
   'intention puis laisse la confirmation se faire. Si une action est refusee, propose une',
-  'alternative sans insister.',
+  'alternative sans insister. Tu peux aussi gerer les pense-betes (rappels), les taches (todo),',
+  "les notes, la meteo, les flux RSS et les widgets de l'accueil personnalise. Avant d'agir sur",
+  "un widget, appelle home.list_widgets pour verifier qu'il est present ; sinon propose de",
+  "l'ajouter avec home.add_widget.",
 ].join(' ')
 
 const MAX_TOOL_ROUNDTRIPS = 6

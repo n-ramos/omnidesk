@@ -277,6 +277,7 @@ export const PRELOAD_EVENTS = {
   AI_TOOL_START: 'ai:tool-start',
   AI_TOOL_END: 'ai:tool-end',
   AI_CONFIRM_REQUEST: 'ai:confirm-request',
+  HOME_UPDATED: 'home:updated',
 } as const
 
 // Source unique des actions de raccourci : voir shortcuts.ts (re-export pour

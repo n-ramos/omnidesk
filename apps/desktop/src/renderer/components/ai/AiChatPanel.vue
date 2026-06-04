@@ -12,6 +12,72 @@ const appStore = useAppStore()
 const draft = ref('')
 const scrollArea = ref<HTMLElement | null>(null)
 
+// --- Deplacement de la bulle (drag par l'en-tete) ----------------------------
+const STORAGE_POS = 'omnidesk.ai.chatPos'
+const panelEl = ref<HTMLElement | null>(null)
+
+function loadPosition(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_POS)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { x: number; y: number }
+    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') return parsed
+  } catch {
+    // ignore : position invalide -> on retombe sur l'ancrage par defaut.
+  }
+  return null
+}
+
+// null = ancrage CSS par defaut (en bas a droite) ; sinon position explicite (x,y).
+const position = ref<{ x: number; y: number } | null>(loadPosition())
+let dragOffsetX = 0
+let dragOffsetY = 0
+let dragW = 360
+let dragH = 0
+
+const clampPosition = (x: number, y: number): { x: number; y: number } => {
+  const maxX = Math.max(0, window.innerWidth - dragW)
+  const maxY = Math.max(0, window.innerHeight - dragH)
+  return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) }
+}
+
+const panelStyle = computed(() =>
+  position.value
+    ? { left: `${position.value.x}px`, top: `${position.value.y}px`, right: 'auto', bottom: 'auto' }
+    : {},
+)
+
+const onDrag = (event: PointerEvent): void => {
+  position.value = clampPosition(event.clientX - dragOffsetX, event.clientY - dragOffsetY)
+}
+
+const endDrag = (): void => {
+  window.removeEventListener('pointermove', onDrag)
+  if (position.value) {
+    try {
+      localStorage.setItem(STORAGE_POS, JSON.stringify(position.value))
+    } catch {
+      // stockage indisponible : la position ne sera juste pas memorisee.
+    }
+  }
+}
+
+const startDrag = (event: PointerEvent): void => {
+  // Ne pas demarrer un drag depuis un bouton de l'en-tete (nouvelle conversation / fermer).
+  if ((event.target as HTMLElement).closest('button')) return
+  const el = panelEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  dragW = rect.width
+  dragH = rect.height
+  dragOffsetX = event.clientX - rect.left
+  dragOffsetY = event.clientY - rect.top
+  // On passe en positionnement explicite des le depart (evite tout saut visuel).
+  position.value = clampPosition(rect.left, rect.top)
+  window.addEventListener('pointermove', onDrag)
+  window.addEventListener('pointerup', endDrag, { once: true })
+}
+
 // --- Dictee vocale (STT) -----------------------------------------------------
 const recording = ref(false)
 const transcribing = ref(false)
@@ -20,9 +86,76 @@ let mediaRecorder: MediaRecorder | null = null
 let mediaStream: MediaStream | null = null
 let audioChunks: Blob[] = []
 
+// Detection de silence : on arrete tout seul apres une pause, sans recliquer sur le micro.
+const SILENCE_MS = 1500
+const MAX_RECORDING_MS = 30_000
+const SPEECH_THRESHOLD = 0.01
+let audioContext: AudioContext | null = null
+let analyser: AnalyserNode | null = null
+let vadInterval: ReturnType<typeof setInterval> | null = null
+let maxTimer: ReturnType<typeof setTimeout> | null = null
+let speechSeen = false
+let silenceStart = 0
+
+const teardownVad = (): void => {
+  if (vadInterval) {
+    clearInterval(vadInterval)
+    vadInterval = null
+  }
+  if (maxTimer) {
+    clearTimeout(maxTimer)
+    maxTimer = null
+  }
+  analyser = null
+  if (audioContext) {
+    void audioContext.close()
+    audioContext = null
+  }
+}
+
+const setupVad = (stream: MediaStream): void => {
+  try {
+    audioContext = new AudioContext()
+    void audioContext.resume()
+    const source = audioContext.createMediaStreamSource(stream)
+    analyser = audioContext.createAnalyser()
+    analyser.fftSize = 2048
+    source.connect(analyser)
+    const samples = new Float32Array(analyser.fftSize)
+    speechSeen = false
+    silenceStart = 0
+    vadInterval = setInterval(() => {
+      if (!analyser) return
+      analyser.getFloatTimeDomainData(samples)
+      let sum = 0
+      for (const value of samples) sum += value * value
+      const rms = Math.sqrt(sum / samples.length)
+      const now = performance.now()
+      if (rms > SPEECH_THRESHOLD) {
+        speechSeen = true
+        silenceStart = 0
+      } else if (speechSeen) {
+        if (silenceStart === 0) silenceStart = now
+        else if (now - silenceStart > SILENCE_MS) stopRecording()
+      }
+    }, 120)
+    // Garde-fou : on ne laisse pas l'enregistrement tourner indefiniment.
+    maxTimer = setTimeout(() => stopRecording(), MAX_RECORDING_MS)
+  } catch {
+    // Analyse audio indisponible : on garde le mode manuel (clic sur le micro pour arreter).
+  }
+}
+
 const canSend = computed(() => draft.value.trim().length > 0 && !chat.streaming)
 // On ne montre l'invite de configuration qu'une fois les reglages charges (sinon faux negatif).
 const showConfigHint = computed(() => ai.loaded && !ai.configured)
+// Message affiche dans la conversation tant que l'assistant n'est pas utilisable, oriente selon
+// la cause : cle manquante (le plus courant) ou assistant non active.
+const configMessage = computed(() =>
+  !ai.hasToken
+    ? "Je ne suis pas encore configuree : ajoutez une cle OpenAI dans les reglages pour qu'on puisse discuter."
+    : "Activez l'assistant dans les reglages pour commencer.",
+)
 
 const scrollToBottom = (): void => {
   void nextTick(() => {
@@ -35,6 +168,26 @@ watch(
   () => [chat.open, chat.messages.length, chat.messages[chat.messages.length - 1]?.content, chat.activity],
   () => {
     if (chat.open) scrollToBottom()
+  },
+)
+
+// A l'ouverture, on reclampe une position memorisee qui serait hors de l'ecran (fenetre reduite).
+watch(
+  () => chat.open,
+  (open) => {
+    if (!open) return
+    // Recharge les reglages a l'ouverture pour que le message "pas de cle" soit fiable.
+    if (!ai.loaded) void ai.load()
+    if (!position.value) return
+    void nextTick(() => {
+      const el = panelEl.value
+      const pos = position.value
+      if (!el || !pos) return
+      const rect = el.getBoundingClientRect()
+      dragW = rect.width
+      dragH = rect.height
+      position.value = clampPosition(pos.x, pos.y)
+    })
   },
 )
 
@@ -73,7 +226,7 @@ const startRecording = async (): Promise<void> => {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
   } catch {
-    micError.value = "Micro indisponible ou acces refuse."
+    micError.value = 'Micro indisponible ou acces refuse.'
     return
   }
   audioChunks = []
@@ -86,11 +239,13 @@ const startRecording = async (): Promise<void> => {
   }
   mediaRecorder.start()
   recording.value = true
+  setupVad(mediaStream)
 }
 
 const stopRecording = (): void => {
   if (!recording.value) return
   recording.value = false
+  teardownVad()
   mediaRecorder?.stop()
   releaseStream()
 }
@@ -122,7 +277,9 @@ const toggleRecording = (): void => {
 }
 
 onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', onDrag)
   if (recording.value) mediaRecorder?.stop()
+  teardownVad()
   releaseStream()
 })
 </script>
@@ -131,9 +288,14 @@ onBeforeUnmount(() => {
   <Transition name="ai-panel">
     <section
       v-if="chat.open"
+      ref="panelEl"
+      :style="panelStyle"
       class="app-no-drag fixed bottom-[6.75rem] right-5 z-[60] flex max-h-[min(60vh,520px)] w-[360px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl bg-ink-900/95 shadow-2xl shadow-black/50 ring-1 ring-white/10 backdrop-blur-md"
     >
-      <header class="flex items-center gap-2 border-b border-white/10 px-3.5 py-2.5">
+      <header
+        class="flex cursor-move touch-none select-none items-center gap-2 border-b border-white/10 px-3.5 py-2.5"
+        @pointerdown="startDrag"
+      >
         <Bot class="text-accent-mint" :size="18" />
         <span class="flex-1 text-sm font-semibold text-white">Elodie</span>
         <button
@@ -155,18 +317,19 @@ onBeforeUnmount(() => {
       </header>
 
       <div ref="scrollArea" class="flex-1 space-y-3 overflow-y-auto px-3.5 py-3.5">
-        <div
-          v-if="showConfigHint"
-          class="rounded-xl bg-ink-950/55 p-3 text-sm leading-6 text-zinc-300"
-        >
-          <p>Pour discuter avec Elodie, activez l'assistant et ajoutez une cle OpenAI.</p>
-          <button
-            type="button"
-            class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent-mint/15 px-3 py-1.5 text-xs font-medium text-accent-mint ring-1 ring-accent-mint/30 transition hover:bg-accent-mint/25"
-            @click="openSettings"
+        <div v-if="showConfigHint" class="flex justify-start">
+          <div
+            class="max-w-[85%] rounded-2xl bg-white/[0.05] px-3 py-2 text-sm leading-6 text-zinc-200 ring-1 ring-white/10"
           >
-            Ouvrir les reglages
-          </button>
+            <p>{{ configMessage }}</p>
+            <button
+              type="button"
+              class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent-mint/15 px-3 py-1.5 text-xs font-medium text-accent-mint ring-1 ring-accent-mint/30 transition hover:bg-accent-mint/25"
+              @click="openSettings"
+            >
+              Ouvrir les reglages
+            </button>
+          </div>
         </div>
 
         <p v-else-if="chat.messages.length === 0" class="px-1 text-sm leading-6 text-zinc-500">
@@ -220,7 +383,7 @@ onBeforeUnmount(() => {
                 : 'bg-white/[0.04] text-zinc-300 ring-white/10 hover:bg-white/[0.08] disabled:opacity-40'
             "
             :disabled="transcribing || chat.streaming"
-            :title="recording ? 'Arreter la dictee' : 'Dicter au micro'"
+            :title="recording ? 'Arreter la dictee maintenant' : 'Dicter au micro'"
             @click="toggleRecording"
           >
             <Loader2 v-if="transcribing" :size="16" class="animate-spin" />
@@ -230,7 +393,7 @@ onBeforeUnmount(() => {
           <textarea
             v-model="draft"
             rows="1"
-            :placeholder="recording ? 'Dictee en cours...' : 'Ecrire un message...'"
+            :placeholder="recording ? 'Parlez... (arret automatique au silence)' : 'Ecrire un message...'"
             class="max-h-28 min-h-[2.5rem] flex-1 resize-none rounded-xl bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-white/10 transition focus:ring-accent-mint/40"
             @keydown="onKeydown"
           />
