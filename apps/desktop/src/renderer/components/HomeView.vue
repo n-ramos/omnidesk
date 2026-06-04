@@ -3,6 +3,7 @@ import { ArrowRight, Bell, Inbox, Send, ShieldCheck } from 'lucide-vue-next'
 import BaseButton from '@renderer/components/ui/BaseButton.vue'
 import ProviderLogo from '@renderer/components/ui/ProviderLogo.vue'
 import StatusBadge from '@renderer/components/ui/StatusBadge.vue'
+import { confirm } from '@renderer/composables/useConfirm'
 import { useAppStore } from '@renderer/stores/appStore'
 import type { ProviderKind } from '@shared/models'
 import {
@@ -37,8 +38,18 @@ const iconTint = (id: ProviderKind): string => {
 
 // Slack, Teams... : raccourcis "mode web" qui creent un compte webpage preconfigure (meme
 // logique que AddAccountDialog). Garde la page d'accueil alignee sur la liste complete des
-// services proposes par l'application.
+// services proposes par l'application. Confirmation explicite avant l'ajout pour eviter
+// les ajouts accidentels (le bouton ressemble a une carte d'info au premier coup d'oeil).
 const connectWebService = async (preset: WebServicePreset): Promise<void> => {
+  const ok = await confirm({
+    title: `Ajouter ${preset.label} ?`,
+    message: `${preset.label} sera ajoute a vos comptes en mode web. Vous pourrez vous y connecter dans la page (session isolee).`,
+    confirmLabel: 'Ajouter',
+    tone: 'primary',
+  })
+  if (!ok) {
+    return
+  }
   await store.connectWebpageAccount({ label: preset.label, url: preset.url })
 }
 

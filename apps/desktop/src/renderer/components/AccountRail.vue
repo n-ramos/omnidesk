@@ -273,21 +273,6 @@ const formatBadge = (count: number): string => (count > 99 ? '99+' : String(coun
     </button>
 
     <button
-      v-if="showGithubService"
-      class="app-no-drag grid size-10 place-items-center rounded-xl transition"
-      :class="
-        store.activeView === 'github'
-          ? 'bg-white/[0.12] text-accent-mint shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
-          : 'text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100'
-      "
-      title="GitHub"
-      type="button"
-      @click="store.setView('github')"
-    >
-      <Github :size="18" />
-    </button>
-
-    <button
       class="app-no-drag grid size-10 place-items-center rounded-xl transition"
       :class="
         chat.open
@@ -368,6 +353,23 @@ const formatBadge = (count: number): string => (count > 99 ? '99+' : String(coun
           />
         </button>
       </div>
+
+      <!-- GitHub : service applicatif natif (pas un compte de messagerie). Affiche dans
+           la liste des apps utilisateur des qu'il est connecte, au meme titre que les autres. -->
+      <button
+        v-if="showGithubService"
+        class="app-no-drag relative grid size-11 place-items-center rounded-xl text-zinc-100 transition duration-200"
+        :class="
+          store.activeView === 'github'
+            ? 'bg-white/[0.12] shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
+            : 'bg-white/[0.045] shadow-line hover:bg-white/[0.085]'
+        "
+        title="GitHub"
+        type="button"
+        @click="store.setView('github')"
+      >
+        <Github :size="20" />
+      </button>
 
       <button
         class="app-no-drag grid size-11 place-items-center rounded-xl border border-dashed border-white/[0.1] text-zinc-500 transition hover:border-white/[0.2] hover:text-zinc-200"
