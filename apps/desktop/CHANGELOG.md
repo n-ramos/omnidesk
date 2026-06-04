@@ -8,6 +8,24 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.4.0] - 2026-06-04
+
+### Ajoute
+
+- Connexion par compte pour OmniChat (messagerie et appels) : inscription et connexion par
+  adresse email et mot de passe, verification de l'email par un code a 6 chiffres, et
+  reinitialisation en cas de mot de passe oublie.
+- Reglages > Compte OmniChat : modifier le nom affiche (pseudo), copier son identifiant a
+  partager, et se deconnecter.
+
+### Modifie
+
+- Ton adresse email est desormais ton identite OmniChat : les messages directs et les appels
+  s'adressent par email, et c'est le nom affiche (pseudo) qui apparait partout. Les contacts
+  s'ajoutent par leur adresse email (ceux ajoutes auparavant sont a re-ajouter).
+- Le reste de l'application (courrier, navigateur, coffre, assistant) reste accessible meme
+  sans etre connecte a OmniChat.
+
 ## [0.3.0] - 2026-06-04
 
 ### Ajoute

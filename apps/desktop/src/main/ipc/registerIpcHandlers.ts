@@ -29,6 +29,7 @@ import { MessageSendService } from '@main/providers/messageSendService'
 import { OmnichatService } from '@main/omnichat/omnichatService'
 import { OmnichatIdentityService } from '@main/omnichat/omnichatIdentityService'
 import { signalingClient } from '@main/omnichat/signalingClient'
+import { accountAuthService } from '@main/account/accountAuthService'
 import { ProviderConnectionService } from '@main/providers/providerConnectionService'
 import { providerRegistry } from '@main/providers/providerRegistry'
 import { ReactionToggleService } from '@main/providers/reactionToggleService'
@@ -223,7 +224,7 @@ export const registerIpcHandlers = (
   const messageSender = new MessageSendService(db)
   const reactionToggler = new ReactionToggleService(db)
   const attachmentDownloader = new AttachmentDownloadService(db)
-  const omnichat = new OmnichatService(db)
+  const omnichat = new OmnichatService()
   const omnichatIdentity = new OmnichatIdentityService(db)
   const appSettings = new AppSettingsRepository(db)
   const homeLayout = new HomeLayoutRepository(db)
@@ -707,27 +708,79 @@ export const registerIpcHandlers = (
     available: omnichat.isAvailable(),
   }))
 
+  // --- Auth (compte OmniProxy, mode accounts) ------------------------------
+  // Les jetons restent cote main (accountSessionVault). register/login posent une
+  // session ; logout la revoque cote serveur + purge en local. Tout changement d'etat
+  // est aussi pousse au renderer via PRELOAD_EVENTS.AUTH_STATE (cf. main/index.ts).
+  registerValidatedHandler(IPC_CHANNELS.AUTH_GET_STATE, z.undefined(), () =>
+    accountAuthService.status(),
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.AUTH_REGISTER,
+    z.object({
+      email: z.string().trim().email().max(320),
+      password: z.string().min(8).max(200),
+      displayName: z.string().trim().min(1).max(80),
+    }),
+    (input) => accountAuthService.register(input),
+    { redactPayload: true },
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.AUTH_LOGIN,
+    z.object({
+      email: z.string().trim().email().max(320),
+      password: z.string().min(1).max(200),
+    }),
+    (input) => accountAuthService.login(input),
+    { redactPayload: true },
+  )
+
+  registerValidatedHandler(IPC_CHANNELS.AUTH_LOGOUT, z.undefined(), () => accountAuthService.logout())
+
+  registerValidatedHandler(
+    IPC_CHANNELS.AUTH_VERIFY_EMAIL,
+    z.object({ code: z.string().trim().min(4).max(12) }),
+    ({ code }) => accountAuthService.verifyEmail(code),
+    { redactPayload: true },
+  )
+
+  registerValidatedHandler(IPC_CHANNELS.AUTH_RESEND_VERIFICATION, z.undefined(), () =>
+    accountAuthService.resendVerification(),
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.AUTH_FORGOT_PASSWORD,
+    z.object({ email: z.string().trim().email().max(320) }),
+    ({ email }) => accountAuthService.forgotPassword(email),
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.AUTH_RESET_PASSWORD,
+    z.object({
+      email: z.string().trim().email().max(320),
+      code: z.string().trim().min(4).max(12),
+      newPassword: z.string().min(8).max(200),
+    }),
+    (input) => accountAuthService.resetPassword(input),
+    { redactPayload: true },
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.AUTH_UPDATE_PROFILE,
+    z.object({ displayName: z.string().trim().min(1).max(80) }),
+    ({ displayName }) => accountAuthService.updateDisplayName(displayName),
+  )
+
   // --- Omnichat (messagerie native temps reel via WebSocket OmniProxy) -----
 
+  // Identite OmniChat = compte connecte (email + displayName), derivee de la session.
+  // Lecture seule : plus de choix de pseudo (le serveur impose l'email du jeton).
   registerValidatedHandler(IPC_CHANNELS.OMNICHAT_GET_IDENTITY, z.undefined(), () => ({
     identity: omnichatIdentity.peek(),
     connected: signalingClient.isConnected(),
   }))
-
-  registerValidatedHandler(
-    IPC_CHANNELS.OMNICHAT_SET_IDENTITY,
-    z.object({ pseudo: z.string().trim().min(1).max(80) }),
-    ({ pseudo }) => {
-      omnichatIdentity.setIdentity(pseudo)
-      // Reconnecte avec la nouvelle identite (nouveau hello). isConnected sera
-      // false le temps du re-welcome ; le renderer recoit ensuite l'evenement.
-      signalingClient.restart()
-      return {
-        identity: omnichatIdentity.peek(),
-        connected: signalingClient.isConnected(),
-      }
-    },
-  )
 
   registerValidatedHandler(
     IPC_CHANNELS.OMNICHAT_ADD_CONTACT,

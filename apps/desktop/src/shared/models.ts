@@ -497,7 +497,8 @@ export type OmnichatTargetDto =
   | { kind: 'dm'; userId: string }
   | { kind: 'group'; groupId: string }
 
-// Identite omnichat facon Discord : pseudo choisi + identifiant unique aleatoire.
+// Identite omnichat = compte OmniProxy connecte : `id` = email (identifiant de transport,
+// en minuscules) et `pseudo` = nom affiche du compte. Le serveur la derive du JWT.
 export interface OmnichatIdentity {
   id: string
   pseudo: string
@@ -510,7 +511,7 @@ export interface OmnichatIdentityState {
 }
 
 // Contact omnichat (modele sans annuaire global) : ajoute par l'utilisateur via son
-// identifiant (le "hash" = UUID) + un pseudo saisi localement. `online` est une
+// adresse email (= identifiant OmniChat) + un pseudo (libelle) local. `online` est une
 // surcouche ephemere derivee de la presence serveur (restreinte a nos contacts).
 export interface OmnichatContact {
   id: string

@@ -15,6 +15,7 @@ import {
   type ServerEnvelope,
 } from '@shared/omnichatProtocol'
 import { omniProxyClient } from '@main/proxy/omniProxyClient'
+import { accountAuthService } from '@main/account/accountAuthService'
 import {
   OmnichatIdentityService,
   type ResolvedOmnichatIdentity,
@@ -85,7 +86,7 @@ export class SignalingClient {
     }
     this.identity = this.identityService.resolve()
     if (!this.identity) {
-      logger.info('omnichat: aucune identite (compte IMAP) - signalisation inactive')
+      logger.info('omnichat: aucune session de compte - signalisation inactive')
       this.emitConnection(false)
       return
     }
@@ -128,7 +129,13 @@ export class SignalingClient {
   // liste affichee dans le rail ; l'online se met a jour via les evenements de presence.
   listContacts(): OmnichatContact[] {
     return [...this.contacts.values()]
-      .map((contact) => ({ ...contact, online: this.onlineIds.has(contact.id) }))
+      .map((contact) => ({
+        ...contact,
+        // Affiche le displayName (pseudo) vu en presence/roster si connu, jamais l'email.
+        // Repli sur le libelle local saisi a l'ajout tant que le pair n'a pas ete vu.
+        pseudo: this.knownPseudos.get(contact.id) ?? contact.pseudo,
+        online: this.onlineIds.has(contact.id),
+      }))
       .sort((left, right) => left.pseudo.localeCompare(right.pseudo))
   }
 
@@ -464,38 +471,70 @@ export class SignalingClient {
     if (!appConfig.OMNIDESK_PROXY_URL || !this.identity) {
       return
     }
+    // Mode comptes : sans session verifiee, pas de connexion (le serveur refuse un hello
+    // non verifie). Le renderer affiche le gate (connexion) ou l'ecran de verification.
+    if (!accountAuthService.isVerified()) {
+      this.emitConnection(false)
+      return
+    }
     const base = appConfig.OMNIDESK_PROXY_URL.replace(/\/+$/, '')
     // http -> ws, https -> wss
     const wsUrl = `${base.replace(/^http/, 'ws')}/omnichat/ws`
 
-    const headers: Record<string, string> = {}
-    if (appConfig.OMNIDESK_PROXY_API_KEY) {
-      headers.Authorization = `Bearer ${appConfig.OMNIDESK_PROXY_API_KEY}`
-    }
-
-    const socket = new WebSocket(wsUrl, { headers })
+    // Plus d'en-tete d'auth a la connexion (l'ancienne cle HMAC a disparu) : l'identite
+    // est prouvee par le JWT d'acces place dans le champ `auth` du hello (cf. sendHello).
+    const socket = new WebSocket(wsUrl)
     this.socket = socket
 
     socket.on('open', () => {
-      if (!this.identity) {
-        return
-      }
-      this.send({
-        t: 'hello',
-        userId: this.identity.id,
-        displayName: this.identity.pseudo,
-        protocol: OMNICHAT_PROTOCOL_VERSION,
-        // Jeton d'identite si configure (requis quand OmniProxy active la signature).
-        ...(appConfig.OMNIDESK_OMNICHAT_TOKEN
-          ? { auth: appConfig.OMNIDESK_OMNICHAT_TOKEN }
-          : {}),
-      })
+      void this.sendHello()
     })
     socket.on('message', (data: RawData, isBinary: boolean) => this.onMessage(data, isBinary))
     socket.on('close', () => this.onClose())
     socket.on('error', (error: Error) => {
       logger.warn('omnichat: erreur socket', { error: error.message })
     })
+  }
+
+  // hello : userId = email, displayName = nom du compte, auth = JWT d'acces. Le serveur
+  // DERIVE l'identite du jeton et ignore userId/displayName (envoyes pour le protocole).
+  // Le jeton est rafraichi juste avant l'envoi pour etre valide a l'etablissement.
+  private async sendHello(): Promise<void> {
+    if (!this.identity) {
+      return
+    }
+    let token: string | null = null
+    try {
+      token = await accountAuthService.ensureFreshAccessToken()
+    } catch {
+      token = null
+    }
+    if (!token) {
+      // Session morte pendant l'ouverture : on coupe (le gate de connexion prend le relais).
+      logger.warn("omnichat: aucun jeton d'acces pour le hello, deconnexion")
+      this.stop()
+      return
+    }
+    this.send({
+      t: 'hello',
+      userId: this.identity.id,
+      displayName: this.identity.pseudo,
+      protocol: OMNICHAT_PROTOCOL_VERSION,
+      auth: token,
+    })
+  }
+
+  // Jeton refuse par le serveur (hello AUTH_INVALID) : on tente UN refresh puis on
+  // reconnecte. On stoppe d'abord pour ne pas boucler en reconnexion avec un jeton deja
+  // rejete. Si le refresh echoue (session morte ou reseau), on reste hors-ligne.
+  private async handleAuthInvalid(): Promise<void> {
+    this.stop()
+    try {
+      await accountAuthService.refreshNow()
+    } catch {
+      return
+    }
+    this.start()
   }
 
   private onClose(): void {
@@ -720,10 +759,17 @@ export class SignalingClient {
       }
       case 'error':
         if (env.code === 'AUTH_INVALID') {
-          // Identite refusee (jeton manquant/invalide) : inutile de boucler en
-          // reconnexion. On s'arrete et on signale l'etat hors-ligne.
-          logger.error('omnichat: identite refusee par le serveur (OMNIDESK_OMNICHAT_TOKEN).')
+          // Jeton refuse (expire/invalide) : tentative de refresh puis reconnexion ;
+          // si le refresh echoue (refresh 401), accountAuthService purge la session et
+          // le gate de connexion reprend la main.
+          logger.warn('omnichat: jeton refuse par le serveur, tentative de refresh')
+          void this.handleAuthInvalid()
+        } else if (env.code === 'EMAIL_NOT_VERIFIED') {
+          // Email non verifie : inutile de boucler. On s'arrete et on resynchronise l'etat
+          // (-> 'unverified') pour que l'ecran de saisie du code prenne le relais.
+          logger.warn('omnichat: email non verifie, arret de la signalisation')
           this.stop()
+          void accountAuthService.refreshUser()
         } else {
           logger.warn('omnichat: erreur serveur', { code: env.code, message: env.message })
         }

@@ -49,32 +49,23 @@ const addCandidates = computed(() => {
     .sort((a, b) => Number(b.online) - Number(a.online) || a.pseudo.localeCompare(b.pseudo))
 })
 
-const parseContactToken = (raw: string): { pseudo: string; id: string } | null => {
-  const value = raw.trim()
-  const hash = value.lastIndexOf('#')
-  if (hash <= 0 || hash === value.length - 1) {
-    return null
-  }
-  const pseudo = value.slice(0, hash).trim()
-  const id = value.slice(hash + 1).trim()
-  return pseudo && id ? { pseudo, id } : null
-}
-
 const invitePeer = async (id: string): Promise<void> => {
   showAddPicker.value = false
   await omnichat.addParticipant(id)
 }
 
+// Invitation par adresse email (= identifiant OmniChat). Enregistre aussi le contact
+// (best-effort) pour retrouver son libelle plus tard.
 const inviteByToken = async (): Promise<void> => {
-  const parsed = parseContactToken(contactToken.value)
-  if (!parsed) {
+  const email = contactToken.value.trim().toLowerCase()
+  if (!/.+@.+\..+/.test(email)) {
     return
   }
-  // On enregistre aussi le contact (best-effort) pour retrouver son pseudo plus tard.
-  void omnichatStore.addContact(parsed.pseudo, parsed.id)
+  const label = email.split('@')[0] || email
+  void omnichatStore.addContact(label, email)
   contactToken.value = ''
   showAddPicker.value = false
-  await omnichat.addParticipant(parsed.id)
+  await omnichat.addParticipant(email)
 }
 
 const initialOf = (name: string): string => name.trim().slice(0, 1).toUpperCase() || '?'
@@ -224,7 +215,7 @@ watch(
                   >{{ peer.online ? 'en ligne' : 'hors ligne' }}</span>
                 </button>
                 <p v-if="addCandidates.length === 0" class="px-3 py-2 text-xs leading-5 text-zinc-500">
-                  Aucun contact disponible. Ajoute par identifiant ci-dessous.
+                  Aucun contact disponible. Ajoute par email ci-dessous.
                 </p>
               </div>
               <form
@@ -234,8 +225,8 @@ watch(
                 <input
                   v-model="contactToken"
                   class="w-full rounded-md bg-ink-950/55 px-2 py-1.5 text-xs text-white placeholder-zinc-600 outline-none"
-                  placeholder="pseudo#identifiant"
-                  type="text"
+                  placeholder="Email du contact"
+                  type="email"
                 />
                 <button
                   class="shrink-0 rounded-md bg-accent-mint px-2 py-1.5 text-xs font-semibold text-ink-950 transition hover:brightness-110 disabled:opacity-40"

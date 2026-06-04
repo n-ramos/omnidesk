@@ -84,14 +84,12 @@ applyBakedEnv()
 const envSchema = z.object({
   OMNIDESK_APP_PROTOCOL: z.string().min(1).default('omnidesk'),
   OMNIDESK_LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug', 'silly']).default('info'),
-  // OmniProxy : backend qui mint les jetons LiveKit (omnichat). Optionnel :
-  // sans lui, l'omnichat (appels audio/video) est desactive.
+  // OmniProxy : backend qui authentifie le compte (mode comptes) et mint les jetons
+  // LiveKit (omnichat). Optionnel : sans lui, la messagerie native et les appels sont
+  // desactives (le reste de l'app fonctionne hors connexion). En mode comptes,
+  // l'authentification se fait par COMPTE (JWT, geres cote main) : plus de cle d'API
+  // ni de jeton partage -- seule l'URL est requise.
   OMNIDESK_PROXY_URL: z.string().url().optional(),
-  OMNIDESK_PROXY_API_KEY: z.string().optional(),
-  // Jeton d'identite omnichat (optionnel) : requis seulement si OmniProxy active
-  // la signature (OMNICHAT_SIGNING_SECRET). Genere par `pnpm token <email>` cote
-  // serveur. Lie cette installation a un email precis (anti-usurpation).
-  OMNIDESK_OMNICHAT_TOKEN: z.string().optional(),
   OMNIDESK_SYNC_INTERVAL_IMAP_SECONDS: z.coerce.number().int().min(15).max(3600).default(60),
   OMNIDESK_TENOR_API_KEY: z.string().optional(),
   OMNIDESK_TENOR_CLIENT_KEY: z.string().default('omnidesk-desktop'),

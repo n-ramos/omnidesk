@@ -20,6 +20,7 @@ import type {
   AiToolEndEvent,
   AiToolStartEvent,
 } from '@shared/ai'
+import type { AuthStatus } from '@shared/auth'
 
 interface AppEventMap {
   'notification:created': LocalNotification
@@ -48,6 +49,9 @@ interface AppEventMap {
   'ai:confirm-request': AiConfirmRequestEvent
   // Accueil personnalise modifie par l'IA (widgets/config) -> le renderer recharge la disposition.
   'home:updated': Record<string, never>
+  // Session du compte OmniProxy (mode accounts) : etat de connexion change (login,
+  // logout, refresh, purge sur refresh invalide) -> le renderer met a jour le gate.
+  'account:session': AuthStatus
 }
 
 type AppEventName = keyof AppEventMap

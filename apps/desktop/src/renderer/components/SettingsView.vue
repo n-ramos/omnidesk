@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import {
+  AlertTriangle,
   Bell,
   Bird,
   Bot,
@@ -14,6 +15,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   MonitorCog,
   PackageCheck,
   PaintBucket,
@@ -37,6 +39,7 @@ import { confirm } from '@renderer/composables/useConfirm'
 import { useAppStore } from '@renderer/stores/appStore'
 import { nextMascotId, useMascotStore } from '@renderer/stores/mascotStore'
 import { useAiStore } from '@renderer/stores/aiStore'
+import { useSessionStore } from '@renderer/stores/sessionStore'
 import { randomQuote } from '@renderer/data/quotes'
 import {
   ACCENT_PRESETS,
@@ -54,6 +57,7 @@ import type { AccountSetupStatus, StartupView } from '@shared/models'
 const store = useAppStore()
 const mascot = useMascotStore()
 const ai = useAiStore()
+const session = useSessionStore()
 
 // --- Assistant IA ------------------------------------------------------------
 const aiTokenInput = ref('')
@@ -63,6 +67,7 @@ const aiTestResult = ref<{ ok: boolean; message: string } | null>(null)
 
 onMounted(() => {
   void ai.load()
+  void session.init()
 })
 
 const saveAiToken = async (): Promise<void> => {
@@ -234,8 +239,14 @@ const startupOptions: StartupOption[] = [
   },
 ]
 
+// Comptes PROVIDER (mail IMAP / pages web). On EXCLUT le compte "self" omnichat : c'est un
+// ancrage interne de la messagerie native, totalement distinct des comptes a ajouter /
+// synchroniser ici. La connexion OmniChat (auth par compte) a son propre bloc "Compte OmniChat".
+const providerAccounts = computed(() =>
+  store.accounts.filter((account) => account.providerId !== 'omnichat'),
+)
 const connectedAccounts = computed(() =>
-  store.accounts.filter((account) => account.setupStatus === 'connected'),
+  providerAccounts.value.filter((account) => account.setupStatus === 'connected'),
 )
 
 const formatLastSync = (value?: string): string => {
@@ -261,6 +272,59 @@ const confirmDisconnect = async (accountId: string, label: string): Promise<void
   if (ok) {
     void store.disconnectAccount(accountId)
   }
+}
+
+// Deconnexion du compte OmniChat (mode comptes) : revoque le refresh + purge la session
+// locale -> retour au gate de connexion. Confirme car la messagerie/les appels s'arretent.
+const logoutAccount = async (): Promise<void> => {
+  const ok = await confirm({
+    title: "Se deconnecter d'OmniChat ?",
+    message: "La messagerie et les appels seront indisponibles jusqu'a la prochaine connexion.",
+    confirmLabel: 'Se deconnecter',
+    tone: 'danger',
+  })
+  if (ok) {
+    await session.logout()
+  }
+}
+
+// --- Compte OmniChat : edition du pseudo + identifiant ----------------------
+const editingPseudo = ref(false)
+const pseudoDraft = ref('')
+
+const startEditPseudo = (): void => {
+  pseudoDraft.value = session.user?.displayName ?? ''
+  editingPseudo.value = true
+}
+
+const savePseudo = async (): Promise<void> => {
+  const next = pseudoDraft.value.trim()
+  if (!next) {
+    return
+  }
+  if (await session.updateDisplayName(next)) {
+    editingPseudo.value = false
+  }
+}
+
+// L'email reste l'identifiant technique (cle des DM) mais ne s'AFFICHE pas : on permet
+// seulement de le copier pour le partager (se faire ajouter en contact).
+const copyOmnichatId = async (): Promise<void> => {
+  const id = session.user?.email
+  if (!id) {
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(id)
+    store.actionFeedback = 'Identifiant OmniChat copie.'
+  } catch {
+    // clipboard indisponible : on ignore.
+  }
+}
+
+// Renvoie vers l'ecran de verification d'email (dans le volet OmniChat).
+const goVerifyEmail = (): void => {
+  store.setView('omnichat')
 }
 
 // --- Sauvegarde et restauration ----------------------------------------------
@@ -999,8 +1063,104 @@ const activeCategoryLabel = computed(
         </div>
       </div>
 
+      <!-- Compte OmniChat (mode comptes) : l'email est l'identite OmniChat ; la connexion se
+           fait depuis le volet OmniChat, on expose ici l'etat + la deconnexion. -->
+      <div v-show="isCat('comptes')" class="rounded-2xl bg-white/[0.04] p-4 shadow-line">
+        <div class="mb-3 flex items-center gap-3">
+          <MessageCircle class="text-accent-mint" :size="19" />
+          <h3 class="text-sm font-semibold text-white">Compte OmniChat</h3>
+        </div>
+
+        <!-- Connecte ET email verifie -->
+        <div
+          v-if="session.isAuthenticated && session.user"
+          class="flex flex-col gap-3 rounded-xl bg-ink-950/55 px-3 py-2.5"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
+              <span class="grid size-9 shrink-0 place-items-center rounded-full bg-accent-mint/15 text-xs font-semibold text-accent-mint">
+                {{ (session.user.displayName || '?').trim().slice(0, 1).toUpperCase() }}
+              </span>
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-zinc-100">{{ session.user.displayName }}</p>
+                <p class="truncate text-xs text-zinc-500">Compte OmniChat verifie</p>
+              </div>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <BaseButton v-if="!editingPseudo" variant="secondary" @click="startEditPseudo">
+                Modifier le pseudo
+              </BaseButton>
+              <BaseButton variant="secondary" :disabled="session.working" @click="logoutAccount">
+                <LogOut :size="15" />
+                Se deconnecter
+              </BaseButton>
+            </div>
+          </div>
+
+          <!-- Edition du pseudo (PATCH /auth/me) -->
+          <div v-if="editingPseudo" class="flex items-center gap-2">
+            <input
+              v-model="pseudoDraft"
+              class="w-full rounded-lg bg-ink-900/70 px-3 py-2 text-sm text-white placeholder-zinc-600 shadow-line outline-none focus:ring-1 focus:ring-accent-mint/40"
+              placeholder="Nouveau pseudo"
+              maxlength="80"
+              @keyup.enter="savePseudo"
+            />
+            <BaseButton
+              variant="primary"
+              :disabled="session.working || pseudoDraft.trim().length === 0"
+              @click="savePseudo"
+            >
+              Enregistrer
+            </BaseButton>
+            <BaseButton variant="ghost" @click="editingPseudo = false">Annuler</BaseButton>
+          </div>
+
+          <!-- L'email n'est jamais affiche : on permet seulement de le copier pour le partager. -->
+          <button
+            class="self-start text-xs text-zinc-500 transition hover:text-zinc-300"
+            type="button"
+            @click="copyOmnichatId"
+          >
+            Copier mon identifiant OmniChat (a partager)
+          </button>
+        </div>
+
+        <!-- Connecte mais email non verifie -->
+        <div
+          v-else-if="session.state === 'unverified' && session.user"
+          class="flex items-center justify-between gap-3 rounded-xl bg-ink-950/55 px-3 py-2.5"
+        >
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="grid size-9 shrink-0 place-items-center rounded-full bg-accent-gold/15 text-accent-gold">
+              <AlertTriangle :size="16" />
+            </span>
+            <div class="min-w-0">
+              <p class="truncate text-sm font-semibold text-zinc-100">{{ session.user.displayName }}</p>
+              <p class="truncate text-xs text-accent-gold">Email non verifie</p>
+            </div>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <BaseButton variant="primary" @click="goVerifyEmail">Verifier</BaseButton>
+            <BaseButton variant="secondary" :disabled="session.working" @click="logoutAccount">
+              Se deconnecter
+            </BaseButton>
+          </div>
+        </div>
+
+        <p v-else-if="session.state === 'unconfigured'" class="text-sm leading-6 text-zinc-500">
+          OmniProxy n'est pas configure sur cette installation : la messagerie native et les
+          appels sont indisponibles.
+        </p>
+
+        <p v-else class="text-sm leading-6 text-zinc-500">
+          Aucun compte connecte. Connecte-toi depuis le volet OmniChat (icone message a gauche)
+          pour activer la messagerie et les appels. Ton adresse email est ton identite OmniChat.
+        </p>
+      </div>
+
       <div
-        v-if="store.accounts.length > 0"
+        v-if="providerAccounts.length > 0"
         v-show="isCat('comptes')"
         class="rounded-2xl bg-white/[0.04] p-4 shadow-line"
       >
@@ -1010,7 +1170,7 @@ const activeCategoryLabel = computed(
         </div>
         <div class="grid gap-2">
           <div
-            v-for="account in store.accounts"
+            v-for="account in providerAccounts"
             :key="account.id"
             class="flex items-center justify-between gap-3 rounded-xl bg-ink-950/55 px-3 py-2.5"
           >

@@ -121,6 +121,17 @@ export const useOmnichatStore = defineStore('omnichat', {
         return
       }
       this.initialized = true
+      await this.refresh()
+      this.subscribe()
+    },
+
+    // Recharge identite + conversations + contacts. Appele a l'init et a chaque (re)connexion
+    // au compte (le rail observe session.isAuthenticated -> appelle refresh apres login).
+    async refresh(): Promise<void> {
+      const a = api()
+      if (!a?.omnichat?.getIdentity) {
+        return
+      }
       try {
         const state = await a.omnichat.getIdentity()
         this.identity = state.identity
@@ -129,12 +140,7 @@ export const useOmnichatStore = defineStore('omnichat', {
         // Pas critique : la vue affichera l'etat hors-ligne.
       }
       await this.refreshConversations()
-      try {
-        this.contacts = await a.omnichat.listContacts()
-      } catch {
-        // ignore
-      }
-      this.subscribe()
+      await this.loadContacts()
     },
 
     subscribe(): void {
@@ -618,25 +624,6 @@ export const useOmnichatStore = defineStore('omnichat', {
         return true
       } catch {
         return false
-      }
-    },
-
-    async setIdentity(pseudo: string): Promise<void> {
-      const a = api()
-      if (!a?.omnichat?.setIdentity) {
-        return
-      }
-      this.working = true
-      this.error = undefined
-      try {
-        const state = await a.omnichat.setIdentity(pseudo)
-        this.identity = state.identity
-        this.connected = state.connected
-        await this.refreshConversations()
-      } catch (error) {
-        this.error = errorMessage(error, "Impossible d'enregistrer le pseudo.")
-      } finally {
-        this.working = false
       }
     },
   },

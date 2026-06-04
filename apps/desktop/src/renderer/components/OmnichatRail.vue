@@ -1,76 +1,69 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { MessageCircle, Plus, Send, UserPlus, UserRound, Users, X } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { LogOut, MessageCircle, Plus, UserPlus, UserRound, Users, X } from 'lucide-vue-next'
 import Spinner from '@renderer/components/ui/Spinner.vue'
 import OmnichatCreateGroupDialog from '@renderer/components/OmnichatCreateGroupDialog.vue'
+import OmnichatAuthGate from '@renderer/components/OmnichatAuthGate.vue'
+import OmnichatVerifyEmail from '@renderer/components/OmnichatVerifyEmail.vue'
 import { useAppStore } from '@renderer/stores/appStore'
 import { useOmnichatStore } from '@renderer/stores/omnichatStore'
+import { useSessionStore } from '@renderer/stores/sessionStore'
 
 const store = useAppStore()
 const omnichat = useOmnichatStore()
+const session = useSessionStore()
 
 onMounted(() => {
+  void session.init()
   void omnichat.init()
 })
 
-const contactInput = ref('')
-const pseudoInput = ref('')
-const showCreateGroup = ref(false)
-
-const canSavePseudo = computed(() => pseudoInput.value.trim().length > 0 && !omnichat.working)
-
-// Identifiant court a afficher (facon "pseudo#1a2b").
-const shortId = (id: string): string => id.replace(/-/g, '').slice(0, 4)
-
-// Jeton de contact partage : "pseudo#identifiant" (l'identifiant est un UUID, sans #).
-// On separe sur le DERNIER # (le pseudo peut en contenir un). Les deux sont requis :
-// sans connaitre pseudo ET identifiant, on ne peut pas ajouter quelqu'un.
-const parseContactToken = (raw: string): { pseudo: string; id: string } | null => {
-  const value = raw.trim()
-  const hash = value.lastIndexOf('#')
-  if (hash <= 0 || hash === value.length - 1) {
-    return null
-  }
-  const pseudo = value.slice(0, hash).trim()
-  const id = value.slice(hash + 1).trim()
-  return pseudo && id ? { pseudo, id } : null
-}
-
-const canAddContact = computed(
-  () => parseContactToken(contactInput.value) !== null && !omnichat.working,
+// La session devient active (connexion, ou restauration au demarrage) -> (re)charge
+// l'identite, les conversations et les contacts omnichat.
+watch(
+  () => session.isAuthenticated,
+  (authenticated) => {
+    if (authenticated) {
+      void omnichat.refresh()
+    }
+  },
 )
 
+// Identite affichee : compte connecte. L'email est l'identite OmniChat (a partager pour
+// etre ajoute en contact) ; le nom affiche vient du compte.
+const me = computed(() => session.user)
+
+const contactInput = ref('')
+const showCreateGroup = ref(false)
+
+const isContactEmail = computed(() => /.+@.+\..+/.test(contactInput.value.trim()))
+const canAddContact = computed(() => isContactEmail.value && !omnichat.working)
+
+// On ajoute un contact par son adresse email (= son identifiant OmniChat). Le pseudo
+// local par defaut est la partie avant @ ; l'email (minuscule) est l'identifiant de transport.
 const addContact = async (): Promise<void> => {
-  const parsed = parseContactToken(contactInput.value)
-  if (!parsed) {
-    omnichat.error = 'Format attendu : pseudo#identifiant'
+  const email = contactInput.value.trim().toLowerCase()
+  if (!isContactEmail.value) {
+    omnichat.error = 'Saisis une adresse email valide.'
     return
   }
   try {
-    await omnichat.addContact(parsed.pseudo, parsed.id)
+    const label = email.split('@')[0] || email
+    await omnichat.addContact(label, email)
     contactInput.value = ''
   } catch {
     // L'erreur est exposee via omnichat.error.
   }
 }
 
-const savePseudo = async (): Promise<void> => {
-  if (!canSavePseudo.value) {
-    return
-  }
-  await omnichat.setIdentity(pseudoInput.value.trim())
-  pseudoInput.value = ''
-}
-
 const copied = ref(false)
-const copyMyId = async (): Promise<void> => {
-  const identity = omnichat.identity
-  if (!identity) {
+const copyMyEmail = async (): Promise<void> => {
+  const email = me.value?.email
+  if (!email) {
     return
   }
   try {
-    // Jeton partageable : "pseudo#identifiant" (a coller dans "Ajouter un contact").
-    await navigator.clipboard.writeText(`${identity.pseudo}#${identity.id}`)
+    await navigator.clipboard.writeText(email)
     copied.value = true
     setTimeout(() => {
       copied.value = false
@@ -78,6 +71,10 @@ const copyMyId = async (): Promise<void> => {
   } catch {
     // clipboard indisponible : on ignore.
   }
+}
+
+const logout = async (): Promise<void> => {
+  await session.logout()
 }
 
 const formatTime = (value?: string): string => {
@@ -112,20 +109,23 @@ const initialOf = (label: string): string => label.trim().slice(0, 1).toUpperCas
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-semibold text-white">Omnichat</p>
         <button
-          v-if="omnichat.identity"
+          v-if="me"
           class="block max-w-full truncate text-left text-xs"
           :class="omnichat.connected ? 'text-accent-mint' : 'text-zinc-500'"
           type="button"
-          title="Cliquer pour copier ton identifiant (pseudo#hash) a partager pour etre ajoute"
-          @click="copyMyId"
+          title="Cliquer pour copier ton email (a partager pour etre ajoute en contact)"
+          @click="copyMyEmail"
         >
-          {{ omnichat.identity.pseudo }}<span class="text-zinc-600">#{{ shortId(omnichat.identity.id) }}</span>
-          - {{ copied ? 'identifiant copie' : omnichat.connected ? 'en ligne' : 'hors-ligne' }}
+          {{ me.displayName }}
+          - {{ copied ? 'email copie' : omnichat.connected ? 'en ligne' : 'hors-ligne' }}
         </button>
-        <p v-else class="truncate text-xs text-zinc-500">Non configure</p>
+        <p v-else-if="session.state === 'unconfigured'" class="truncate text-xs text-zinc-500">
+          Non configure
+        </p>
+        <p v-else class="truncate text-xs text-zinc-500">Non connecte</p>
       </div>
       <button
-        v-if="omnichat.identity"
+        v-if="session.isAuthenticated"
         class="grid size-9 shrink-0 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
         type="button"
         title="Creer un groupe"
@@ -133,39 +133,33 @@ const initialOf = (label: string): string => label.trim().slice(0, 1).toUpperCas
       >
         <Plus :size="16" />
       </button>
+      <button
+        v-if="session.isAuthenticated"
+        class="grid size-9 shrink-0 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/[0.06] hover:text-accent-coral"
+        type="button"
+        title="Se deconnecter"
+        :disabled="session.working"
+        @click="logout"
+      >
+        <LogOut :size="16" />
+      </button>
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-      <!-- Pas encore d'identite : on choisit un pseudo (un identifiant unique est
-           genere automatiquement, facon Discord). -->
-      <div v-if="!omnichat.identity" class="px-3 py-6">
-        <div class="mx-auto grid size-12 place-items-center rounded-2xl bg-accent-mint/15 text-accent-mint">
-          <MessageCircle :size="22" />
-        </div>
-        <h3 class="mt-3 text-center text-sm font-semibold text-white">Choisis ton pseudo</h3>
-        <p class="mt-1 text-center text-xs leading-5 text-zinc-500">
-          Un identifiant unique te sera attribue automatiquement. Aucun compte e-mail requis.
-        </p>
-        <form class="mt-3 flex items-center gap-2" @submit.prevent="savePseudo">
-          <input
-            v-model="pseudoInput"
-            class="w-full rounded-lg bg-ink-950/55 px-3 py-2 text-sm text-white placeholder-zinc-600 shadow-line outline-none focus:ring-1 focus:ring-accent-mint/40"
-            placeholder="Ton pseudo"
-            type="text"
-            maxlength="80"
-          />
-          <button
-            class="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-mint text-ink-950 transition hover:brightness-110 disabled:opacity-40"
-            type="submit"
-            title="Valider"
-            :disabled="!canSavePseudo"
-          >
-            <Spinner v-if="omnichat.working" :size="15" label="Enregistrement" />
-            <Send v-else :size="15" />
-          </button>
-        </form>
-        <p v-if="omnichat.error" class="mt-2 text-center text-xs text-accent-coral">{{ omnichat.error }}</p>
-      </div>
+      <!-- OmniProxy absent : ni messagerie ni appels. -->
+      <p
+        v-if="session.state === 'unconfigured'"
+        class="px-3 py-6 text-center text-sm leading-6 text-zinc-500"
+      >
+        OmniProxy n'est pas configure sur cette installation : la messagerie native et les
+        appels sont indisponibles.
+      </p>
+
+      <!-- Session ouverte mais email non verifie : ecran de saisie du code a 6 chiffres. -->
+      <OmnichatVerifyEmail v-else-if="session.state === 'unverified'" />
+
+      <!-- Proxy present mais pas de session : connexion / inscription par compte. -->
+      <OmnichatAuthGate v-else-if="!session.isAuthenticated" />
 
       <template v-else>
         <!-- Groupes -->
@@ -258,7 +252,7 @@ const initialOf = (label: string): string => label.trim().slice(0, 1).toUpperCas
           </div>
         </section>
 
-        <!-- Contacts (carnet d'adresses : on ne voit que ceux qu'on a ajoutes) -->
+        <!-- Contacts (carnet d'adresses : on ne voit que ceux qu'on a ajoutes, par email) -->
         <section v-if="omnichat.contacts.length > 0" class="mb-4">
           <div class="mb-1.5 flex items-center gap-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
             <UserRound :size="12" />
@@ -286,9 +280,7 @@ const initialOf = (label: string): string => label.trim().slice(0, 1).toUpperCas
                   />
                 </span>
                 <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm font-medium text-zinc-100">
-                    {{ contact.pseudo }}<span class="text-zinc-600">#{{ shortId(contact.id) }}</span>
-                  </span>
+                  <span class="block truncate text-sm font-medium text-zinc-100">{{ contact.pseudo }}</span>
                   <span
                     class="block text-[11px]"
                     :class="contact.online ? 'text-accent-mint' : 'text-zinc-600'"
@@ -313,17 +305,16 @@ const initialOf = (label: string): string => label.trim().slice(0, 1).toUpperCas
         >
           {{
             omnichat.connected
-              ? 'Aucun contact. Ajoute quelqu un par son pseudo#identifiant ci-dessous, ou cree un groupe.'
-              : 'Hors-ligne : OmniProxy est requis pour la messagerie omnichat.'
+              ? 'Aucun contact. Ajoute quelqu un par son adresse email ci-dessous, ou cree un groupe.'
+              : 'Connexion a OmniChat en cours...'
           }}
         </p>
       </template>
     </div>
 
-    <!-- Ajouter un contact par pseudo#identifiant (le "hash" du pair, partage comme sur
-         Discord). On ne decouvre personne : il faut connaitre ces deux infos. -->
+    <!-- Ajouter un contact par son adresse email (= son identifiant OmniChat). -->
     <div
-      v-if="omnichat.identity"
+      v-if="session.isAuthenticated"
       class="shrink-0 border-t border-white/[0.04] bg-ink-900/95 px-3 py-3"
     >
       <form class="flex items-center gap-2 rounded-lg bg-ink-950/55 px-3 py-2 shadow-line" @submit.prevent="addContact">
@@ -331,8 +322,8 @@ const initialOf = (label: string): string => label.trim().slice(0, 1).toUpperCas
         <input
           v-model="contactInput"
           class="w-full bg-transparent text-sm text-white placeholder-zinc-600 outline-none"
-          placeholder="Ajouter un contact (pseudo#identifiant)"
-          type="text"
+          placeholder="Ajouter un contact (email)"
+          type="email"
         />
         <button
           class="grid size-7 shrink-0 place-items-center rounded-md text-accent-mint transition hover:bg-accent-mint/15 disabled:opacity-30"

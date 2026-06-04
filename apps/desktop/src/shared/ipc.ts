@@ -64,6 +64,13 @@ import type {
   AiStatus,
   AiTokenState,
 } from './ai'
+import type {
+  AuthLoginInput,
+  AuthRegisterInput,
+  AuthResetPasswordInput,
+  AuthStatus,
+  ResendVerificationResult,
+} from './auth'
 
 export const IPC_CHANNELS = {
   APP_GET_BOOTSTRAP: 'app:get-bootstrap',
@@ -72,6 +79,15 @@ export const IPC_CHANNELS = {
   APP_CHECK_UPDATES: 'app:check-updates',
   APP_INSTALL_UPDATE: 'app:install-update',
   APP_GET_CHANGELOG: 'app:get-changelog',
+  AUTH_GET_STATE: 'auth:get-state',
+  AUTH_REGISTER: 'auth:register',
+  AUTH_LOGIN: 'auth:login',
+  AUTH_LOGOUT: 'auth:logout',
+  AUTH_VERIFY_EMAIL: 'auth:verify-email',
+  AUTH_RESEND_VERIFICATION: 'auth:resend-verification',
+  AUTH_FORGOT_PASSWORD: 'auth:forgot-password',
+  AUTH_RESET_PASSWORD: 'auth:reset-password',
+  AUTH_UPDATE_PROFILE: 'auth:update-profile',
   PROVIDERS_LIST: 'providers:list',
   ACCOUNTS_LIST: 'accounts:list',
   ACCOUNTS_CREATE_DRAFT: 'accounts:create-draft',
@@ -112,7 +128,6 @@ export const IPC_CHANNELS = {
   OMNICHAT_SET_GROUP_CALL: 'omnichat:set-group-call',
   OMNICHAT_AVAILABILITY: 'omnichat:availability',
   OMNICHAT_GET_IDENTITY: 'omnichat:get-identity',
-  OMNICHAT_SET_IDENTITY: 'omnichat:set-identity',
   OMNICHAT_ADD_CONTACT: 'omnichat:add-contact',
   OMNICHAT_REMOVE_CONTACT: 'omnichat:remove-contact',
   OMNICHAT_LIST_CONTACTS: 'omnichat:list-contacts',
@@ -278,6 +293,9 @@ export const PRELOAD_EVENTS = {
   AI_TOOL_END: 'ai:tool-end',
   AI_CONFIRM_REQUEST: 'ai:confirm-request',
   HOME_UPDATED: 'home:updated',
+  // Session du compte OmniProxy : etat (unconfigured/unauthenticated/authenticated) pousse
+  // a chaque changement (login, logout, refresh, purge) -> le renderer met a jour le gate.
+  AUTH_STATE: 'auth:state',
 } as const
 
 // Source unique des actions de raccourci : voir shortcuts.ts (re-export pour
@@ -293,6 +311,15 @@ export interface IpcRequestMap {
   [IPC_CHANNELS.APP_CHECK_UPDATES]: undefined
   [IPC_CHANNELS.APP_INSTALL_UPDATE]: undefined
   [IPC_CHANNELS.APP_GET_CHANGELOG]: undefined
+  [IPC_CHANNELS.AUTH_GET_STATE]: undefined
+  [IPC_CHANNELS.AUTH_REGISTER]: AuthRegisterInput
+  [IPC_CHANNELS.AUTH_LOGIN]: AuthLoginInput
+  [IPC_CHANNELS.AUTH_LOGOUT]: undefined
+  [IPC_CHANNELS.AUTH_VERIFY_EMAIL]: { code: string }
+  [IPC_CHANNELS.AUTH_RESEND_VERIFICATION]: undefined
+  [IPC_CHANNELS.AUTH_FORGOT_PASSWORD]: { email: string }
+  [IPC_CHANNELS.AUTH_RESET_PASSWORD]: AuthResetPasswordInput
+  [IPC_CHANNELS.AUTH_UPDATE_PROFILE]: { displayName: string }
   [IPC_CHANNELS.PROVIDERS_LIST]: undefined
   [IPC_CHANNELS.ACCOUNTS_LIST]: undefined
   [IPC_CHANNELS.ACCOUNTS_CREATE_DRAFT]: CreateDraftAccountInput
@@ -348,7 +375,6 @@ export interface IpcRequestMap {
   }
   [IPC_CHANNELS.OMNICHAT_AVAILABILITY]: undefined
   [IPC_CHANNELS.OMNICHAT_GET_IDENTITY]: undefined
-  [IPC_CHANNELS.OMNICHAT_SET_IDENTITY]: { pseudo: string }
   [IPC_CHANNELS.OMNICHAT_ADD_CONTACT]: { pseudo: string; id: string }
   [IPC_CHANNELS.OMNICHAT_REMOVE_CONTACT]: { id: string }
   [IPC_CHANNELS.OMNICHAT_LIST_CONTACTS]: undefined
@@ -570,6 +596,15 @@ export interface IpcResponseMap {
   [IPC_CHANNELS.APP_CHECK_UPDATES]: { ok: true }
   [IPC_CHANNELS.APP_INSTALL_UPDATE]: { ok: true }
   [IPC_CHANNELS.APP_GET_CHANGELOG]: ChangelogEntry[]
+  [IPC_CHANNELS.AUTH_GET_STATE]: AuthStatus
+  [IPC_CHANNELS.AUTH_REGISTER]: AuthStatus
+  [IPC_CHANNELS.AUTH_LOGIN]: AuthStatus
+  [IPC_CHANNELS.AUTH_LOGOUT]: AuthStatus
+  [IPC_CHANNELS.AUTH_VERIFY_EMAIL]: AuthStatus
+  [IPC_CHANNELS.AUTH_RESEND_VERIFICATION]: ResendVerificationResult
+  [IPC_CHANNELS.AUTH_FORGOT_PASSWORD]: { ok: true }
+  [IPC_CHANNELS.AUTH_RESET_PASSWORD]: { ok: true }
+  [IPC_CHANNELS.AUTH_UPDATE_PROFILE]: AuthStatus
   [IPC_CHANNELS.PROVIDERS_LIST]: ProviderDescriptor[]
   [IPC_CHANNELS.ACCOUNTS_LIST]: AccountSummary[]
   [IPC_CHANNELS.ACCOUNTS_CREATE_DRAFT]: AccountSummary
@@ -610,7 +645,6 @@ export interface IpcResponseMap {
   [IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL]: { ok: true }
   [IPC_CHANNELS.OMNICHAT_AVAILABILITY]: { available: boolean }
   [IPC_CHANNELS.OMNICHAT_GET_IDENTITY]: OmnichatIdentityState
-  [IPC_CHANNELS.OMNICHAT_SET_IDENTITY]: OmnichatIdentityState
   [IPC_CHANNELS.OMNICHAT_ADD_CONTACT]: OmnichatContact
   [IPC_CHANNELS.OMNICHAT_REMOVE_CONTACT]: { ok: true }
   [IPC_CHANNELS.OMNICHAT_LIST_CONTACTS]: OmnichatContact[]
