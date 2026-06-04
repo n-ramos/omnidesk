@@ -5,6 +5,7 @@ import BaseButton from '@renderer/components/ui/BaseButton.vue'
 import ProviderLogo from '@renderer/components/ui/ProviderLogo.vue'
 import Spinner from '@renderer/components/ui/Spinner.vue'
 import StatusBadge from '@renderer/components/ui/StatusBadge.vue'
+import { confirm } from '@renderer/composables/useConfirm'
 import { useAppStore } from '@renderer/stores/appStore'
 import type {
   ConnectImapAccountInput,
@@ -120,7 +121,18 @@ const submitWebpageConnect = async (): Promise<void> => {
 
 // Raccourcis "mode web" (Slack, Teams...) : creent un compte webpage preconfigure sur
 // l'URL du service. L'authentification se fait dans la page, session isolee par compte.
+// Confirmation explicite pour eviter qu'un clic sur la tuile (visuellement proche d'une
+// carte d'info) cree un compte sans intention claire de l'utilisateur.
 const connectWebService = async (preset: WebServicePreset): Promise<void> => {
+  const ok = await confirm({
+    title: `Ajouter ${preset.label} ?`,
+    message: `${preset.label} sera ajoute a vos comptes en mode web. Vous pourrez vous y connecter dans la page (session isolee).`,
+    confirmLabel: 'Ajouter',
+    tone: 'primary',
+  })
+  if (!ok) {
+    return
+  }
   await store.connectWebpageAccount({ label: preset.label, url: preset.url })
 }
 

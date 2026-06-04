@@ -24,7 +24,60 @@ const accounts = computed(() => store.slotAccounts)
 const unreadByAccount = computed(() => store.unreadByAccount)
 const showGithubService = computed(() => store.activeView === 'github' || github.connected)
 
-// Drag & drop pour reordonner les comptes dans le rail.
+// GitHub n'est pas un compte stocke en base mais une vue dediee : on l'injecte comme une
+// tuile virtuelle dans la liste reorganisable du rail. On lui donne la meme forme qu'un
+// AccountSummary (providerId 'github') pour partager le code DnD/template sans union de
+// types, et sa position relative aux comptes reels est persistee separement en localStorage
+// (les comptes reels gardent leur ordre serveur).
+const GITHUB_SENTINEL_ID = '__github__'
+const GITHUB_POSITION_KEY = 'omnidesk:rail:githubPosition'
+
+const isGithubSlot = (item: AccountSummary): boolean => item.id === GITHUB_SENTINEL_ID
+
+const makeGithubSlot = (): AccountSummary => ({
+  id: GITHUB_SENTINEL_ID,
+  providerId: 'github',
+  label: 'GitHub',
+  externalAccountId: 'github:app',
+  isEnabled: true,
+  setupStatus: 'connected',
+})
+
+const loadGithubPosition = (): number => {
+  try {
+    const raw = localStorage.getItem(GITHUB_POSITION_KEY)
+    if (raw !== null) {
+      const parsed = Number.parseInt(raw, 10)
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        return parsed
+      }
+    }
+  } catch {
+    // localStorage indisponible : on retombe sur le placement par defaut (fin de liste).
+  }
+  return -1
+}
+
+const persistGithubPosition = (index: number): void => {
+  try {
+    localStorage.setItem(GITHUB_POSITION_KEY, String(index))
+  } catch {
+    // Sans gravite : la position reviendra a la fin au prochain lancement.
+  }
+}
+
+const buildSlots = (list: AccountSummary[]): AccountSummary[] => {
+  if (!showGithubService.value) {
+    return [...list]
+  }
+  const saved = loadGithubPosition()
+  const insertAt = saved < 0 || saved > list.length ? list.length : saved
+  const next = [...list]
+  next.splice(insertAt, 0, makeGithubSlot())
+  return next
+}
+
+// Drag & drop pour reordonner les comptes (et la tuile GitHub) dans le rail.
 // On garde une copie locale reordonnable pendant le glissement (retour visuel immediat),
 // resynchronisee sur le store des qu'on ne glisse plus.
 const DND_MIME = 'application/x-omnidesk-account'
@@ -32,21 +85,21 @@ const localAccounts = ref<AccountSummary[]>([])
 const draggingId = ref<string | null>(null)
 
 watch(
-  accounts,
-  (next) => {
+  [accounts, showGithubService],
+  ([nextAccounts]) => {
     if (draggingId.value) {
       return
     }
-    localAccounts.value = [...next]
+    localAccounts.value = buildSlots(nextAccounts)
   },
   { immediate: true },
 )
 
-const onAccountDragStart = (accountId: string, event: DragEvent): void => {
-  draggingId.value = accountId
+const onAccountDragStart = (slotId: string, event: DragEvent): void => {
+  draggingId.value = slotId
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData(DND_MIME, accountId)
+    event.dataTransfer.setData(DND_MIME, slotId)
   }
 }
 
@@ -57,7 +110,7 @@ const onAccountDragOver = (overId: string, event: DragEvent): void => {
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
-  const ids = localAccounts.value.map((account) => account.id)
+  const ids = localAccounts.value.map((item) => item.id)
   const fromIndex = ids.indexOf(draggingId.value)
   const toIndex = ids.indexOf(overId)
   if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
@@ -68,17 +121,25 @@ const onAccountDragOver = (overId: string, event: DragEvent): void => {
     return
   }
   ids.splice(toIndex, 0, moved)
-  const byId = new Map(localAccounts.value.map((account) => [account.id, account]))
+  const byId = new Map(localAccounts.value.map((item) => [item.id, item]))
   localAccounts.value = ids
     .map((id) => byId.get(id))
-    .filter((account): account is AccountSummary => account !== undefined)
+    .filter((item): item is AccountSummary => item !== undefined)
 }
 
 const finishAccountDrag = (): void => {
   if (!draggingId.value) {
     return
   }
-  const orderedIds = localAccounts.value.map((account) => account.id)
+  // Position globale de la tuile GitHub (s'il y en a une) sauvee a part : la liste reelle
+  // des comptes serveur n'inclut pas GitHub, on la retire avant reorderAccounts.
+  const githubIndex = localAccounts.value.findIndex(isGithubSlot)
+  if (githubIndex >= 0) {
+    persistGithubPosition(githubIndex)
+  }
+  const orderedIds = localAccounts.value
+    .filter((item) => !isGithubSlot(item))
+    .map((item) => item.id)
   draggingId.value = null
   void store.reorderAccounts(orderedIds)
 }
@@ -273,21 +334,6 @@ const formatBadge = (count: number): string => (count > 99 ? '99+' : String(coun
     </button>
 
     <button
-      v-if="showGithubService"
-      class="app-no-drag grid size-10 place-items-center rounded-xl transition"
-      :class="
-        store.activeView === 'github'
-          ? 'bg-white/[0.12] text-accent-mint shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
-          : 'text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100'
-      "
-      title="GitHub"
-      type="button"
-      @click="store.setView('github')"
-    >
-      <Github :size="18" />
-    </button>
-
-    <button
       class="app-no-drag grid size-10 place-items-center rounded-xl transition"
       :class="
         chat.open
@@ -305,68 +351,87 @@ const formatBadge = (count: number): string => (count > 99 ? '99+' : String(coun
 
     <nav class="scroll-thin flex min-h-0 flex-1 w-full flex-col items-center gap-2.5 overflow-y-auto px-3 pt-2">
       <div
-        v-for="account in localAccounts"
-        :key="account.id"
+        v-for="item in localAccounts"
+        :key="item.id"
         class="relative cursor-grab transition-opacity active:cursor-grabbing"
-        :class="draggingId === account.id ? 'opacity-40' : ''"
+        :class="draggingId === item.id ? 'opacity-40' : ''"
         draggable="true"
-        @dragstart="onAccountDragStart(account.id, $event)"
-        @dragover.prevent="onAccountDragOver(account.id, $event)"
+        @dragstart="onAccountDragStart(item.id, $event)"
+        @dragover.prevent="onAccountDragOver(item.id, $event)"
         @drop.prevent="finishAccountDrag"
         @dragend="finishAccountDrag"
       >
+        <!-- GitHub : service applicatif natif (pas un compte de messagerie). Tuile virtuelle
+             affichee dans la liste des apps utilisateur, reorganisable au meme titre que les
+             vrais comptes. Sa position est persistee separement (cf. setup du composant). -->
         <button
+          v-if="item.id === '__github__'"
           class="app-no-drag relative grid size-11 place-items-center rounded-xl text-zinc-100 transition duration-200"
-          :class="[
-            isAccountActive(account.id)
-              ? 'bg-white/[0.12] shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
-              : 'bg-white/[0.045] shadow-line hover:bg-white/[0.085]',
-          ]"
-          :title="account.label"
-          type="button"
-          @click="handleAccountClick(account.id)"
-          @contextmenu="openContextMenu(account, $event)"
-        >
-          <ProviderLogo
-            :provider-id="account.providerId"
-            :favicon-url="faviconFor(account)"
-            :size="22"
-          />
-          <span
-            v-if="(unreadByAccount.get(account.id) ?? 0) > 0"
-            class="absolute right-0 top-0 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent-coral px-1 text-[9px] font-bold leading-none tabular-nums text-white shadow-[0_0_0_2px_rgba(20,20,24,0.95)]"
-          >
-            {{ formatBadge(unreadByAccount.get(account.id) ?? 0) }}
-          </span>
-          <span
-            v-else-if="account.providerId === 'slack' || account.providerId === 'teams'"
-            class="absolute bottom-0 right-0 grid size-[14px] place-items-center rounded-full bg-ink-925 text-[9px] font-semibold text-zinc-300 ring-1 ring-ink-950"
-          >
-            {{ initialFor(account.label) }}
-          </span>
-        </button>
-        <button
-          v-if="isAudible(account.id)"
-          type="button"
-          class="app-no-drag absolute -bottom-1 -left-1 grid size-[18px] place-items-center rounded-full ring-2 ring-ink-925 transition"
           :class="
-            mediaStateFor(account.id)?.muted
-              ? 'bg-zinc-600 text-white hover:bg-zinc-500'
-              : 'bg-accent-mint text-ink-950 hover:brightness-110'
+            store.activeView === 'github'
+              ? 'bg-white/[0.12] shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
+              : 'bg-white/[0.045] shadow-line hover:bg-white/[0.085]'
           "
-          :title="
-            mediaStateFor(account.id)?.muted
-              ? 'Reactiver le son'
-              : 'Couper le son'
-          "
-          @click="handleToggleMute(account.id, $event)"
+          title="GitHub"
+          type="button"
+          @click="store.setView('github')"
         >
-          <component
-            :is="mediaStateFor(account.id)?.muted ? VolumeX : Volume2"
-            :size="10"
-            :class="!mediaStateFor(account.id)?.muted ? 'animate-pulse' : undefined"
-          />
+          <Github :size="20" />
         </button>
+        <template v-else>
+          <button
+            class="app-no-drag relative grid size-11 place-items-center rounded-xl text-zinc-100 transition duration-200"
+            :class="[
+              isAccountActive(item.id)
+                ? 'bg-white/[0.12] shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
+                : 'bg-white/[0.045] shadow-line hover:bg-white/[0.085]',
+            ]"
+            :title="item.label"
+            type="button"
+            @click="handleAccountClick(item.id)"
+            @contextmenu="openContextMenu(item, $event)"
+          >
+            <ProviderLogo
+              :provider-id="item.providerId"
+              :favicon-url="faviconFor(item)"
+              :size="22"
+            />
+            <span
+              v-if="(unreadByAccount.get(item.id) ?? 0) > 0"
+              class="absolute right-0 top-0 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent-coral px-1 text-[9px] font-bold leading-none tabular-nums text-white shadow-[0_0_0_2px_rgba(20,20,24,0.95)]"
+            >
+              {{ formatBadge(unreadByAccount.get(item.id) ?? 0) }}
+            </span>
+            <span
+              v-else-if="item.providerId === 'slack' || item.providerId === 'teams'"
+              class="absolute bottom-0 right-0 grid size-[14px] place-items-center rounded-full bg-ink-925 text-[9px] font-semibold text-zinc-300 ring-1 ring-ink-950"
+            >
+              {{ initialFor(item.label) }}
+            </span>
+          </button>
+          <button
+            v-if="isAudible(item.id)"
+            type="button"
+            class="app-no-drag absolute -bottom-1 -left-1 grid size-[18px] place-items-center rounded-full ring-2 ring-ink-925 transition"
+            :class="
+              mediaStateFor(item.id)?.muted
+                ? 'bg-zinc-600 text-white hover:bg-zinc-500'
+                : 'bg-accent-mint text-ink-950 hover:brightness-110'
+            "
+            :title="
+              mediaStateFor(item.id)?.muted
+                ? 'Reactiver le son'
+                : 'Couper le son'
+            "
+            @click="handleToggleMute(item.id, $event)"
+          >
+            <component
+              :is="mediaStateFor(item.id)?.muted ? VolumeX : Volume2"
+              :size="10"
+              :class="!mediaStateFor(item.id)?.muted ? 'animate-pulse' : undefined"
+            />
+          </button>
+        </template>
       </div>
 
       <button
