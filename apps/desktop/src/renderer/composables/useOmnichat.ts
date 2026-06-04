@@ -65,6 +65,44 @@ const createState = (): OmnichatState => ({
 
 const state = reactive<OmnichatState>(createState())
 
+// Choix des peripheriques audio/video, persistes entre les sessions. Vide = on
+// laisse le systeme choisir. Appliques au prochain appel (audioCaptureDefaults
+// /videoCaptureDefaults) et a chaud via room.switchActiveDevice + setSinkId.
+export interface MediaDeviceSettings {
+  audioInputId: string
+  audioOutputId: string
+  videoInputId: string
+}
+
+const DEVICE_STORAGE_KEY = 'omnidesk:call:devices'
+
+const loadMediaSettings = (): MediaDeviceSettings => {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_STORAGE_KEY) : null
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<MediaDeviceSettings>
+      return {
+        audioInputId: parsed.audioInputId ?? '',
+        audioOutputId: parsed.audioOutputId ?? '',
+        videoInputId: parsed.videoInputId ?? '',
+      }
+    }
+  } catch {
+    // localStorage HS / JSON invalide : on repart proprement.
+  }
+  return { audioInputId: '', audioOutputId: '', videoInputId: '' }
+}
+
+const mediaSettings = reactive<MediaDeviceSettings>(loadMediaSettings())
+
+const persistMediaSettings = (): void => {
+  try {
+    localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(mediaSettings))
+  } catch {
+    // idem loadMediaSettings : sans gravite, le choix est juste perdu au prochain demarrage.
+  }
+}
+
 // Objets LiveKit gardes HORS de la reactivite Vue (ce sont des instances de
 // classes complexes ; les rendre reactifs casserait leur fonctionnement).
 let room: Room | null = null
@@ -215,6 +253,22 @@ const scheduleSync = (): void => {
 
 // Pistes audio distantes : on les attache a des elements <audio> caches pour les
 // entendre. On n'attache jamais l'audio local (pas d'echo).
+// `setSinkId` n'est pas standardise partout : on capsule l'appel avec un cast minimal.
+const applySinkId = (element: HTMLMediaElement, deviceId: string): void => {
+  if (!deviceId) {
+    return
+  }
+  const sinkable = element as HTMLMediaElement & {
+    setSinkId?: (id: string) => Promise<void>
+  }
+  if (typeof sinkable.setSinkId !== 'function') {
+    return
+  }
+  void sinkable.setSinkId(deviceId).catch(() => {
+    // Sortie disparue ou non autorisee : on laisse le device par defaut.
+  })
+}
+
 const attachAudio = (track: RemoteTrack): void => {
   if (track.kind !== Track.Kind.Audio || !track.sid) {
     return
@@ -223,6 +277,7 @@ const attachAudio = (track: RemoteTrack): void => {
   element.style.display = 'none'
   document.body.appendChild(element)
   audioEls.set(track.sid, element)
+  applySinkId(element, mediaSettings.audioOutputId)
 }
 
 const detachAudio = (track: RemoteTrack): void => {
@@ -334,7 +389,19 @@ const connectToRoom = async (
 
   try {
     const { url, token } = await api().omnichat.getCallToken(callId, roomName)
-    const next = new Room({ adaptiveStream: true, dynacast: true })
+    const next = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      audioCaptureDefaults: {
+        deviceId: mediaSettings.audioInputId || undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      videoCaptureDefaults: {
+        deviceId: mediaSettings.videoInputId || undefined,
+      },
+    })
     wireEvents(next)
     await next.connect(url, token)
     room = next
@@ -520,6 +587,40 @@ const requestTileFullscreen = (key: string): void => {
   }
 }
 
+// Change un peripherique (entree audio/video ou sortie audio), persiste le choix
+// et l'applique a chaud si un appel est en cours. Chaine vide = revenir au defaut systeme.
+const setMediaDevice = async (
+  kind: 'audioinput' | 'audiooutput' | 'videoinput',
+  deviceId: string,
+): Promise<void> => {
+  if (kind === 'audioinput') {
+    mediaSettings.audioInputId = deviceId
+  } else if (kind === 'audiooutput') {
+    mediaSettings.audioOutputId = deviceId
+  } else {
+    mediaSettings.videoInputId = deviceId
+  }
+  persistMediaSettings()
+
+  // Sortie : LiveKit ne tient pas l'etat sinkId des <audio> qu'on a montes
+  // nous-memes, on l'applique a la main sur chaque element existant.
+  if (kind === 'audiooutput') {
+    for (const element of audioEls.values()) {
+      applySinkId(element, deviceId)
+    }
+  }
+
+  if (!room || !deviceId) {
+    return
+  }
+  try {
+    await room.switchActiveDevice(kind, deviceId, true)
+  } catch {
+    // Peripherique disparu ou refuse : on garde le choix persiste pour la prochaine
+    // tentative, mais on ne casse pas l'appel en cours.
+  }
+}
+
 // Ref callback du <video> de chaque tuile : attache (ou detache) la piste.
 const bindVideo = (key: string, element: HTMLVideoElement | null): void => {
   if (element) {
@@ -541,6 +642,8 @@ const bindVideo = (key: string, element: HTMLVideoElement | null): void => {
 
 export const useOmnichat = () => ({
   state,
+  mediaSettings,
+  setMediaDevice,
   startCall,
   acceptCall,
   addParticipant,

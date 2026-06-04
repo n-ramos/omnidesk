@@ -10,6 +10,7 @@ import {
   PhoneOff,
   ScreenShare,
   ScreenShareOff,
+  Settings,
   UserPlus,
   Users,
   Video,
@@ -18,6 +19,7 @@ import {
 import { callOverlayState, closeCallOverlay } from '@renderer/composables/useCallOverlay'
 import { useOmnichat, type CallVideoSource } from '@renderer/composables/useOmnichat'
 import { useOmnichatStore } from '@renderer/stores/omnichatStore'
+import CallMediaSettingsDialog from '@renderer/components/CallMediaSettingsDialog.vue'
 
 interface DisplayCell {
   key: string
@@ -36,6 +38,9 @@ const omnichatStore = useOmnichatStore()
 // --- Ajouter quelqu'un a l'appel (modele Teams : on construit l'appel) ---------
 const showAddPicker = ref(false)
 const contactToken = ref('')
+
+// Dialog de selection des peripheriques audio/video + test micro.
+const showMediaSettings = ref(false)
 
 // Candidats : contacts + membres du groupe ouvert, hors participants deja presents et soi.
 const addCandidates = computed(() => {
@@ -240,6 +245,15 @@ watch(
           </div>
           <button
             class="grid size-9 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+            :class="{ 'bg-white/[0.08] text-white': showMediaSettings }"
+            title="Peripheriques audio/video"
+            type="button"
+            @click="showMediaSettings = true"
+          >
+            <Settings :size="18" />
+          </button>
+          <button
+            class="grid size-9 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
             title="Reduire (l'appel continue)"
             type="button"
             @click="closeCallOverlay"
@@ -382,6 +396,11 @@ watch(
           <PhoneOff :size="20" />
         </button>
       </footer>
+
+      <CallMediaSettingsDialog
+        :open="showMediaSettings"
+        @close="showMediaSettings = false"
+      />
     </div>
   </Transition>
 </template>
