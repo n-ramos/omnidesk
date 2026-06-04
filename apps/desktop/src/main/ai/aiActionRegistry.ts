@@ -2,6 +2,11 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import { AppError } from '@shared/errors'
 import type { AiProviderTool, AiToolDefinition } from '@shared/ai'
 
+// OpenAI exige des noms d'outils correspondant a ^[a-zA-Z0-9_-]+$ : nos noms internes du type
+// "domaine.action" contiennent un point, interdit. On les assainit (point -> underscore) avant
+// l'envoi au fournisseur, puis on re-resout le nom assaini a la reception d'un appel d'outil.
+export const sanitizeToolName = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, '_')
+
 // Registre des actions IA. Le contrat (AiToolDefinition) vit dans shared/ai ; ici on les
 // rassemble, on les expose au fournisseur (JSON Schema) et on valide les arguments du modele.
 export class AiActionRegistry {
@@ -35,13 +40,15 @@ export class AiActionRegistry {
       >
       // OpenAI n'attend pas la cle $schema dans les parametres d'outil ; on l'enleve.
       delete jsonSchema.$schema
-      return { name: action.name, description: action.description, jsonSchema }
+      return { name: sanitizeToolName(action.name), description: action.description, jsonSchema }
     })
   }
 
-  // Valide les arguments produits par le modele AVANT tout preview/execute.
+  // Valide les arguments produits par le modele AVANT tout preview/execute. Le modele renvoie le
+  // nom assaini (cf. toProviderTools) : on resout d'abord par nom exact, puis par nom assaini.
   parseArguments(name: string, raw: unknown): { definition: AiToolDefinition<unknown>; args: unknown } {
-    const definition = this.get(name)
+    const definition =
+      this.get(name) ?? this.list().find((action) => sanitizeToolName(action.name) === name)
     if (!definition) {
       throw new AppError('AI_TOOL_UNKNOWN', `Outil inconnu : ${name}`)
     }
