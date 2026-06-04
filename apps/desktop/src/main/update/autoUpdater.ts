@@ -6,8 +6,8 @@ import { PRELOAD_EVENTS, type AppUpdateStatus } from '@shared/ipc'
 
 // checkForUpdatesAndNotify ne s'execute qu'au lancement : pour les sessions longues
 // on relance un controle periodique afin de ne pas rater une release publiee apres
-// l'ouverture de l'app.
-const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
+// l'ouverture de l'app. Ici toutes les 10 minutes.
+const RECHECK_INTERVAL_MS = 10 * 60 * 1000
 
 type GetWindow = () => BrowserWindow | null
 
