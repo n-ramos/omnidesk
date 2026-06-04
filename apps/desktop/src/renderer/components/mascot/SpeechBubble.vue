@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BellRing, Quote as QuoteIcon, Sparkles, X } from 'lucide-vue-next'
+import { BellRing, Lightbulb, Quote as QuoteIcon, Sparkles, X } from 'lucide-vue-next'
 import type { MascotMessageKind } from '@renderer/stores/mascotStore'
 
 const props = defineProps<{
@@ -31,6 +31,7 @@ const headerLabel = computed(() => {
   if (props.title) return props.title
   if (props.kind === 'reminder') return 'Pense-bete'
   if (props.kind === 'nudge') return 'Petit rappel'
+  if (props.kind === 'tip') return 'Astuce'
   return 'Elodie'
 })
 
@@ -40,6 +41,7 @@ const isQuote = computed(() => props.kind === 'quote')
 <template>
   <div
     class="omnihoowl-bubble relative w-[clamp(220px,70vw,300px)] rounded-2xl bg-ink-900/95 p-3.5 pr-9 text-sm text-zinc-100 shadow-lift ring-1 ring-white/[0.06] backdrop-blur"
+    :class="{ 'cursor-pointer': kind === 'tip' }"
   >
     <button
       type="button"
@@ -56,6 +58,7 @@ const isQuote = computed(() => props.kind === 'quote')
     >
       <BellRing v-if="kind === 'reminder'" :size="13" />
       <Sparkles v-else-if="kind === 'nudge'" :size="13" />
+      <Lightbulb v-else-if="kind === 'tip'" :size="13" />
       <QuoteIcon v-else :size="13" />
       <span>{{ headerLabel }}</span>
     </div>

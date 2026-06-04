@@ -10,13 +10,16 @@ import {
   type MascotMessage,
 } from '@renderer/stores/mascotStore'
 import { useAiChatStore } from '@renderer/stores/aiChatStore'
+import { useAiStore } from '@renderer/stores/aiStore'
 import { randomQuote } from '@renderer/data/quotes'
+import { randomAiTip } from '@renderer/data/aiTips'
 import { playMascotChirp } from '@renderer/utils/mascotSound'
 import type { LocalNotification } from '@shared/models'
 
 const store = useMascotStore()
 const appStore = useAppStore()
 const chat = useAiChatStore()
+const ai = useAiStore()
 
 // Le lecteur multimedia est une barre en bas de fenetre : on remonte Elodie au-dessus
 // quand il est visible pour ne pas le recouvrir (ni bloquer le volume).
@@ -31,6 +34,7 @@ const hover = ref(false)
 const peekHover = ref(false)
 const sleeping = ref(false)
 const lastQuoteText = ref<string | undefined>(undefined)
+const lastTipText = ref<string | undefined>(undefined)
 
 // Etat "rangee" : Elodie glisse derriere le bord droit, seule sa moitie gauche (un oeil)
 // reste visible. Au survol, la languette s'elargit : elle se penche et montre ses deux yeux.
@@ -117,9 +121,21 @@ const buildReminder = (notification: LocalNotification): MascotMessage => {
   return { id: nextMascotId(), kind: 'reminder', text, durationMs: 13000 }
 }
 
+// Suggestion de commande IA (decouverte). Affichee seulement quand l'assistant est configure.
+const buildAiTip = (): MascotMessage => {
+  const text = randomAiTip(lastTipText.value)
+  lastTipText.value = text
+  return { id: nextMascotId(), kind: 'tip', text, durationMs: 11000 }
+}
+
 const ambientTick = (): void => {
   // Pas de bavardage si Elodie est masquee, rangee, en sourdine, ou endormie (absence).
   if (!store.enabled || store.tucked || store.muted || sleeping.value) return
+  // Quand l'assistant IA est pret, on glisse parfois une suggestion de commande (decouverte).
+  if (ai.configured && Math.random() < 0.35) {
+    store.enqueue(buildAiTip())
+    return
+  }
   const useNudge = Math.random() < 0.45
   store.enqueue(useNudge ? buildNudge() : buildQuote())
 }
@@ -141,6 +157,15 @@ const onOwlClick = (): void => {
 // Ouvre la bulle de conversation IA (le bavardage/citations restent sur le clic de la chouette).
 const openChat = (): void => {
   chat.openPanel()
+}
+
+// Un clic sur une bulle d'astuce ouvre la conversation (hors clic sur la croix de fermeture).
+const onBubbleClick = (event: MouseEvent): void => {
+  if ((event.target as HTMLElement).closest('button')) return
+  if (store.message?.kind === 'tip') {
+    chat.openPanel()
+    store.dismiss()
+  }
 }
 
 const toggleMute = (): void => {
@@ -266,6 +291,7 @@ onBeforeUnmount(() => {
             :duration-ms="store.message.durationMs"
             @close="dismissCurrent"
             @elapsed="dismissCurrent"
+            @click="onBubbleClick"
           />
         </Transition>
 
