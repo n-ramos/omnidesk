@@ -8,6 +8,13 @@ A chaque release, ajouter une section `## [x.y.z] - AAAA-MM-JJ` en tete (sous-ti
 `### Ajoute` / `### Modifie` / `### Corrige`). La modal "Nouveautes", affichee une seule
 fois apres une mise a jour, reprend les sections plus recentes que la version precedente.
 
+## [0.2.1] - 2026-06-04
+
+### Modifie
+
+- L'application verifie les mises a jour plus souvent (toutes les 10 minutes au lieu de toutes
+  les 6 heures) : une nouvelle version est ainsi proposee plus rapidement apres sa publication.
+
 ## [0.2.0] - 2026-06-03
 
 ### Ajoute
