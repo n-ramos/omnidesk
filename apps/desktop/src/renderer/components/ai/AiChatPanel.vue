@@ -41,11 +41,57 @@ const clampPosition = (x: number, y: number): { x: number; y: number } => {
   return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) }
 }
 
-const panelStyle = computed(() =>
-  position.value
-    ? { left: `${position.value.x}px`, top: `${position.value.y}px`, right: 'auto', bottom: 'auto' }
-    : {},
-)
+// --- Redimensionnement de la bulle (poignee bas-droite) ----------------------
+const STORAGE_SIZE = 'omnidesk.ai.chatSize'
+const MIN_PANEL_W = 320
+const MIN_PANEL_H = 320
+
+function loadSize(): { w: number; h: number } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_SIZE)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { w: number; h: number }
+    if (typeof parsed?.w === 'number' && typeof parsed?.h === 'number') return parsed
+  } catch {
+    // ignore : taille invalide -> on retombe sur la taille par defaut.
+  }
+  return null
+}
+
+// null = taille par defaut (classes CSS) ; sinon largeur/hauteur explicites (px).
+const size = ref<{ w: number; h: number } | null>(loadSize())
+let resizeStartX = 0
+let resizeStartY = 0
+let resizeStartW = 0
+let resizeStartH = 0
+
+const clampSize = (w: number, h: number): { w: number; h: number } => {
+  const anchorX = position.value?.x ?? 0
+  const anchorY = position.value?.y ?? 0
+  const maxW = Math.max(MIN_PANEL_W, window.innerWidth - anchorX - 8)
+  const maxH = Math.max(MIN_PANEL_H, window.innerHeight - anchorY - 8)
+  return {
+    w: Math.min(Math.max(MIN_PANEL_W, w), maxW),
+    h: Math.min(Math.max(MIN_PANEL_H, h), maxH),
+  }
+}
+
+const panelStyle = computed<Record<string, string>>(() => {
+  const style: Record<string, string> = {}
+  if (position.value) {
+    style.left = `${position.value.x}px`
+    style.top = `${position.value.y}px`
+    style.right = 'auto'
+    style.bottom = 'auto'
+  }
+  if (size.value) {
+    style.width = `${size.value.w}px`
+    style.height = `${size.value.h}px`
+    style.maxWidth = 'none'
+    style.maxHeight = 'none'
+  }
+  return style
+})
 
 const onDrag = (event: PointerEvent): void => {
   position.value = clampPosition(event.clientX - dragOffsetX, event.clientY - dragOffsetY)
@@ -76,6 +122,41 @@ const startDrag = (event: PointerEvent): void => {
   position.value = clampPosition(rect.left, rect.top)
   window.addEventListener('pointermove', onDrag)
   window.addEventListener('pointerup', endDrag, { once: true })
+}
+
+const onResize = (event: PointerEvent): void => {
+  size.value = clampSize(
+    resizeStartW + (event.clientX - resizeStartX),
+    resizeStartH + (event.clientY - resizeStartY),
+  )
+}
+
+const endResize = (): void => {
+  window.removeEventListener('pointermove', onResize)
+  try {
+    if (size.value) localStorage.setItem(STORAGE_SIZE, JSON.stringify(size.value))
+    if (position.value) localStorage.setItem(STORAGE_POS, JSON.stringify(position.value))
+  } catch {
+    // stockage indisponible : la taille ne sera juste pas memorisee.
+  }
+}
+
+const startResize = (event: PointerEvent): void => {
+  const el = panelEl.value
+  if (!el) return
+  event.preventDefault()
+  event.stopPropagation()
+  const rect = el.getBoundingClientRect()
+  dragW = rect.width
+  dragH = rect.height
+  // On epingle le coin haut-gauche pour que le redimensionnement s'etende vers le bas-droite.
+  position.value = clampPosition(rect.left, rect.top)
+  resizeStartX = event.clientX
+  resizeStartY = event.clientY
+  resizeStartW = rect.width
+  resizeStartH = rect.height
+  window.addEventListener('pointermove', onResize)
+  window.addEventListener('pointerup', endResize, { once: true })
 }
 
 // --- Dictee vocale (STT) -----------------------------------------------------
@@ -178,15 +259,16 @@ watch(
     if (!open) return
     // Recharge les reglages a l'ouverture pour que le message "pas de cle" soit fiable.
     if (!ai.loaded) void ai.load()
-    if (!position.value) return
+    if (!position.value && !size.value) return
     void nextTick(() => {
       const el = panelEl.value
-      const pos = position.value
-      if (!el || !pos) return
+      if (!el) return
       const rect = el.getBoundingClientRect()
       dragW = rect.width
       dragH = rect.height
-      position.value = clampPosition(pos.x, pos.y)
+      // Reclampe une position/taille memorisee qui sortirait de l'ecran (fenetre reduite).
+      if (position.value) position.value = clampPosition(position.value.x, position.value.y)
+      if (size.value) size.value = clampSize(size.value.w, size.value.h)
     })
   },
 )
@@ -278,6 +360,7 @@ const toggleRecording = (): void => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onDrag)
+  window.removeEventListener('pointermove', onResize)
   if (recording.value) mediaRecorder?.stop()
   teardownVad()
   releaseStream()
@@ -419,6 +502,25 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </footer>
+
+      <!-- Poignee de redimensionnement (coin bas-droite) -->
+      <div
+        class="absolute bottom-0 right-0 z-10 grid size-3.5 cursor-nwse-resize touch-none place-items-center text-zinc-500 transition hover:text-zinc-300"
+        title="Redimensionner"
+        @pointerdown="startResize"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+        >
+          <path d="M11 5 L5 11 M11 9 L9 11" />
+        </svg>
+      </div>
     </section>
   </Transition>
 </template>
