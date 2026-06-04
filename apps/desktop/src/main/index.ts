@@ -9,6 +9,7 @@ import { registerIpcHandlers } from '@main/ipc/registerIpcHandlers'
 import { logger } from '@main/logger'
 import { NativeNotificationService } from '@main/notifications/nativeNotifications'
 import { signalingClient } from '@main/omnichat/signalingClient'
+import { accountAuthService } from '@main/account/accountAuthService'
 import { ReminderScheduler } from '@main/reminders/reminderScheduler'
 import { PassVaultService } from '@main/omnipass/passVaultService'
 import { SyncEngine } from '@main/sync/syncEngine'
@@ -42,6 +43,7 @@ let stopAiToolStartBridge: (() => void) | undefined
 let stopAiToolEndBridge: (() => void) | undefined
 let stopAiConfirmRequestBridge: (() => void) | undefined
 let stopHomeUpdatedBridge: (() => void) | undefined
+let stopAccountSessionBridge: (() => void) | undefined
 // Id du rebond du dock macOS declenche par un appel entrant (annule a la fin).
 let incomingCallBounceId: number | null = null
 
@@ -478,6 +480,22 @@ app.whenReady().then(() => {
   stopHomeUpdatedBridge = eventBus.on('home:updated', (payload) =>
     sendAiEvent(PRELOAD_EVENTS.HOME_UPDATED, payload),
   )
+  // Pont session de compte (mode accounts) -> renderer (gate connexion) ET cycle de vie de
+  // la signalisation omnichat. On n'agit sur la signalisation qu'aux TRANSITIONS d'/vers
+  // 'authenticated' : un simple refresh garde l'etat 'authenticated' et ne doit pas relancer
+  // la connexion WS (le jeton n'est requis qu'au hello). webContents.send no-op si la fenetre
+  // n'existe pas encore (le renderer amorce son etat via auth.getState au montage).
+  let lastAuthState = accountAuthService.status().state
+  stopAccountSessionBridge = eventBus.on('account:session', (status) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.AUTH_STATE, status)
+    const previous = lastAuthState
+    lastAuthState = status.state
+    if (status.state === 'authenticated' && previous !== 'authenticated') {
+      signalingClient.restart()
+    } else if (status.state !== 'authenticated' && previous === 'authenticated') {
+      signalingClient.stop()
+    }
+  })
   // Verrouillage du coffre a la mise en veille et au verrouillage de session OS. L'auto-lock par
   // inactivite (cote service) reste le filet principal. Le verrouillage sur simple perte de focus
   // est volontairement ecarte en M0 : trop agressif tant que le deverrouillage biometrique (M3)
@@ -486,6 +504,10 @@ app.whenReady().then(() => {
   powerMonitor.on('lock-screen', () => passVaultService?.lock())
   signalingClient.init(db)
   signalingClient.start()
+  // Restaure une eventuelle session de compte puis tente un refresh. Asynchrone a dessein :
+  // ne pas bloquer le demarrage sur un appel reseau. Le pont account:session ci-dessus
+  // (re)lancera la signalisation omnichat une fois la session authentifiee.
+  void accountAuthService.restoreSession()
   setupMediaPermissions()
   createMainWindow()
   autoUpdate.init({ getWindow: () => mainWindow })
@@ -520,7 +542,9 @@ app.on('before-quit', () => {
   stopAiToolEndBridge?.()
   stopAiConfirmRequestBridge?.()
   stopHomeUpdatedBridge?.()
+  stopAccountSessionBridge?.()
   signalingClient.stop()
+  accountAuthService.stop()
   syncEngine.stop()
   reminderScheduler?.stop()
   passVaultService?.lock()

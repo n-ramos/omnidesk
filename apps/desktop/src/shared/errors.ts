@@ -18,6 +18,19 @@ export type AppErrorCode =
   | 'AI_TOOL_UNKNOWN'
   | 'AI_TOOL_INVALID_ARGS'
   | 'AI_PROVIDER_ERROR'
+  // Authentification par compte aupres d'OmniProxy (mode accounts).
+  | 'ACCOUNT_NOT_AUTHENTICATED'
+  | 'ACCOUNT_AUTH_FAILED'
+  | 'ACCOUNT_EMAIL_TAKEN'
+  | 'ACCOUNT_DISABLED'
+  // Email non verifie (compte cree mais messagerie/appels bloques tant que non verifie).
+  | 'ACCOUNT_EMAIL_NOT_VERIFIED'
+  // Code de verification invalide / expire / aucune verification en attente.
+  | 'ACCOUNT_VERIFICATION_FAILED'
+  // Reinitialisation de mot de passe : code/email invalide ou expire (message generique).
+  | 'ACCOUNT_RESET_INVALID'
+  // Trop de tentatives (429) sur la verification.
+  | 'ACCOUNT_RATE_LIMITED'
 
 export class AppError extends Error {
   constructor(

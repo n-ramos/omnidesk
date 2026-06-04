@@ -48,6 +48,7 @@ import type {
   AiToolEndEvent,
   AiToolStartEvent,
 } from '@shared/ai'
+import type { AuthStatus } from '@shared/auth'
 
 const invoke = <Channel extends IpcChannel>(
   channel: Channel,
@@ -64,6 +65,27 @@ export interface OmnideskApi {
     checkForUpdates: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_CHECK_UPDATES]>
     installUpdate: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_INSTALL_UPDATE]>
     getChangelog: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.APP_GET_CHANGELOG]>
+  }
+  auth: {
+    getState: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_GET_STATE]>
+    register: (
+      input: IpcRequestMap[typeof IPC_CHANNELS.AUTH_REGISTER],
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_REGISTER]>
+    login: (
+      input: IpcRequestMap[typeof IPC_CHANNELS.AUTH_LOGIN],
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_LOGIN]>
+    logout: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_LOGOUT]>
+    verifyEmail: (code: string) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_VERIFY_EMAIL]>
+    resendVerification: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_RESEND_VERIFICATION]>
+    forgotPassword: (
+      email: string,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_FORGOT_PASSWORD]>
+    resetPassword: (
+      input: IpcRequestMap[typeof IPC_CHANNELS.AUTH_RESET_PASSWORD],
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_RESET_PASSWORD]>
+    updateProfile: (
+      displayName: string,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_UPDATE_PROFILE]>
   }
   providers: {
     list: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.PROVIDERS_LIST]>
@@ -201,9 +223,6 @@ export interface OmnideskApi {
     ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL]>
     availability: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_AVAILABILITY]>
     getIdentity: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_GET_IDENTITY]>
-    setIdentity: (
-      pseudo: string,
-    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.OMNICHAT_SET_IDENTITY]>
     addContact: (
       pseudo: string,
       id: string,
@@ -616,6 +635,7 @@ export interface OmnideskApi {
     onAiToolEnd: (listener: (event: AiToolEndEvent) => void) => () => void
     onAiConfirmRequest: (listener: (event: AiConfirmRequestEvent) => void) => () => void
     onHomeUpdated: (listener: () => void) => () => void
+    onAuthState: (listener: (status: AuthStatus) => void) => () => void
   }
 }
 
@@ -627,6 +647,17 @@ export const omnideskApi: OmnideskApi = {
     checkForUpdates: () => invoke(IPC_CHANNELS.APP_CHECK_UPDATES, undefined),
     installUpdate: () => invoke(IPC_CHANNELS.APP_INSTALL_UPDATE, undefined),
     getChangelog: () => invoke(IPC_CHANNELS.APP_GET_CHANGELOG, undefined),
+  },
+  auth: {
+    getState: () => invoke(IPC_CHANNELS.AUTH_GET_STATE, undefined),
+    register: (input) => invoke(IPC_CHANNELS.AUTH_REGISTER, input),
+    login: (input) => invoke(IPC_CHANNELS.AUTH_LOGIN, input),
+    logout: () => invoke(IPC_CHANNELS.AUTH_LOGOUT, undefined),
+    verifyEmail: (code) => invoke(IPC_CHANNELS.AUTH_VERIFY_EMAIL, { code }),
+    resendVerification: () => invoke(IPC_CHANNELS.AUTH_RESEND_VERIFICATION, undefined),
+    forgotPassword: (email) => invoke(IPC_CHANNELS.AUTH_FORGOT_PASSWORD, { email }),
+    resetPassword: (input) => invoke(IPC_CHANNELS.AUTH_RESET_PASSWORD, input),
+    updateProfile: (displayName) => invoke(IPC_CHANNELS.AUTH_UPDATE_PROFILE, { displayName }),
   },
   providers: {
     list: () => invoke(IPC_CHANNELS.PROVIDERS_LIST, undefined),
@@ -697,7 +728,6 @@ export const omnideskApi: OmnideskApi = {
     setGroupCall: (input) => invoke(IPC_CHANNELS.OMNICHAT_SET_GROUP_CALL, input),
     availability: () => invoke(IPC_CHANNELS.OMNICHAT_AVAILABILITY, undefined),
     getIdentity: () => invoke(IPC_CHANNELS.OMNICHAT_GET_IDENTITY, undefined),
-    setIdentity: (pseudo) => invoke(IPC_CHANNELS.OMNICHAT_SET_IDENTITY, { pseudo }),
     addContact: (pseudo, id) => invoke(IPC_CHANNELS.OMNICHAT_ADD_CONTACT, { pseudo, id }),
     removeContact: (id) => invoke(IPC_CHANNELS.OMNICHAT_REMOVE_CONTACT, { id }),
     listContacts: () => invoke(IPC_CHANNELS.OMNICHAT_LIST_CONTACTS, undefined),
@@ -1170,6 +1200,14 @@ export const omnideskApi: OmnideskApi = {
 
       ipcRenderer.on(PRELOAD_EVENTS.HOME_UPDATED, wrappedListener)
       return () => ipcRenderer.off(PRELOAD_EVENTS.HOME_UPDATED, wrappedListener)
+    },
+    onAuthState: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, status: AuthStatus): void => {
+        listener(status)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.AUTH_STATE, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.AUTH_STATE, wrappedListener)
     },
   },
 }

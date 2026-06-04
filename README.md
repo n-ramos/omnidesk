@@ -169,12 +169,15 @@ docker compose up -d         # LiveKit + redis + egress + MinIO (necessaire pour
 pnpm dev                     # http://127.0.0.1:8787 ; curl .../health pour verifier
 ```
 
-Puis cote Omnidesk, dans `apps/desktop/.env` :
+Puis cote Omnidesk, dans `apps/desktop/.env` (mode comptes : seule l'URL est requise) :
 
 ```bash
 OMNIDESK_PROXY_URL=http://127.0.0.1:8787
-OMNIDESK_PROXY_API_KEY=<identique a OMNIPROXY_API_KEY>
 ```
+
+La connexion se fait ensuite par **compte** (inscription / connexion email + mot de passe)
+directement dans l'app, depuis l'ecran OmniChat : plus aucune cle d'API ni jeton partage a
+configurer cote desktop. L'email du compte est aussi l'identite OmniChat (DM, presence, appels).
 
 Voir le [README d'OmniProxy](https://github.com/n-ramos/omniproxy) pour le detail (endpoints, securite, infra LiveKit).
 

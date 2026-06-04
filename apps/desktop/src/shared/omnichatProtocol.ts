@@ -56,7 +56,9 @@ export const clientEnvelopeSchema = z.discriminatedUnion('t', [
     userId: z.string().min(1).max(LIMITS.userId),
     displayName: z.string().min(1).max(LIMITS.displayName),
     protocol: z.literal(OMNICHAT_PROTOCOL_VERSION),
-    auth: z.string().min(1).max(512).optional(),
+    // JWT d'acces (mode comptes) : le serveur en DERIVE l'identite (email + displayName)
+    // et ignore userId/displayName. Borne large pour accueillir un JWT.
+    auth: z.string().min(1).max(4096).optional(),
   }),
   z.object({
     t: z.literal('msg'),

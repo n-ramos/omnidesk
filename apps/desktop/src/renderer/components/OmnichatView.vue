@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   AlertTriangle,
   CircleDot,
@@ -14,9 +14,14 @@ import BaseButton from '@renderer/components/ui/BaseButton.vue'
 import StatusBadge from '@renderer/components/ui/StatusBadge.vue'
 import { openCallOverlay } from '@renderer/composables/useCallOverlay'
 import { useOmnichat } from '@renderer/composables/useOmnichat'
+import { useSessionStore } from '@renderer/stores/sessionStore'
 
 const omnichat = useOmnichat()
 const state = omnichat.state
+const session = useSessionStore()
+
+// Proxy present mais pas connecte : la messagerie et les appels exigent un compte.
+const needsLogin = computed(() => session.isConfigured && !session.isAuthenticated)
 
 // Les appels passent par OmniProxy. Sur une installation sans proxy (ex. la
 // distribution grand public), ils sont indisponibles : on le signale ici plutot
@@ -24,6 +29,7 @@ const state = omnichat.state
 const availability = ref<'unknown' | 'available' | 'unavailable'>('unknown')
 
 onMounted(async () => {
+  void session.init()
   try {
     const result = await window.omnidesk?.omnichat.availability()
     availability.value = result?.available ? 'available' : 'unavailable'
@@ -58,19 +64,23 @@ const features = [
       </div>
       <StatusBadge
         :tone="
-          availability === 'available'
-            ? 'success'
-            : availability === 'unavailable'
-              ? 'danger'
-              : 'neutral'
+          needsLogin
+            ? 'neutral'
+            : availability === 'available'
+              ? 'success'
+              : availability === 'unavailable'
+                ? 'danger'
+                : 'neutral'
         "
       >
         {{
-          availability === 'available'
-            ? 'Pret'
-            : availability === 'unavailable'
-              ? 'Indisponible'
-              : 'Verification...'
+          needsLogin
+            ? 'Connexion requise'
+            : availability === 'available'
+              ? 'Pret'
+              : availability === 'unavailable'
+                ? 'Indisponible'
+                : 'Verification...'
         }}
       </StatusBadge>
     </header>
@@ -123,6 +133,15 @@ const features = [
     >
       <AlertTriangle :size="16" class="mt-0.5 shrink-0" />
       <span>Les appels sont indisponibles : OmniProxy n'est pas configure sur cette installation.</span>
+    </div>
+
+    <!-- Proxy present mais pas connecte : la messagerie et les appels exigent un compte. -->
+    <div
+      v-if="needsLogin"
+      class="mb-4 flex items-start gap-2.5 rounded-2xl border border-accent-mint/25 bg-accent-mint/[0.07] px-4 py-3 text-sm text-accent-mint"
+    >
+      <AlertTriangle :size="16" class="mt-0.5 shrink-0" />
+      <span>Connecte-toi a ton compte dans le volet OmniChat (a gauche) pour utiliser la messagerie et les appels.</span>
     </div>
 
     <div class="grid gap-3 sm:grid-cols-3">

@@ -1,6 +1,7 @@
 import { appConfig } from '@main/config/env'
 import { AppError, type AppErrorCode } from '@shared/errors'
-import { logger } from '@main/logger'
+import { accountAuthService } from '@main/account/accountAuthService'
+import { postJson, type JsonError, type JsonResult } from '@main/proxy/httpJson'
 
 export interface CallTokenInput {
   callId: string
@@ -16,14 +17,10 @@ export interface LivekitTokenResult {
   identity: string
 }
 
-interface ProxyErrorBody {
-  error?: string
-  message?: string
-}
-
-// Client du backend OmniProxy (omnichat / LiveKit). C'est le SEUL composant qui
-// parle au proxy ; le renderer ne le voit jamais (il passe par IPC). Le proxy
-// detient les cles LiveKit ; ici on ne transporte que la cle d'API partagee.
+// Client du backend OmniProxy (LiveKit). C'est le SEUL composant main qui parle aux
+// routes LiveKit ; le renderer ne le voit jamais (il passe par IPC). Le proxy detient
+// les cles LiveKit. En mode comptes, le jeton d'ACCES (JWT court) voyage dans le CORPS
+// (champ `auth`) et `identity` DOIT etre l'email du compte (cf. accountAuthService).
 class OmniProxyClient {
   isConfigured(): boolean {
     return Boolean(appConfig.OMNIDESK_PROXY_URL)
@@ -37,74 +34,63 @@ class OmniProxyClient {
     return url.replace(/\/+$/, '')
   }
 
-  private async post<T>(
+  // Routes LiveKit protegees : refresh PROACTIF du jeton avant l'appel, puis rejeu UNE
+  // fois sur 401/403 (jeton refuse/expire) apres un /auth/refresh. Un refresh 401 purge
+  // la session (-> retour au gate de connexion via l'evenement account:session).
+  private async postLivekit<T>(
     path: string,
-    body: unknown,
+    body: Record<string, unknown>,
     errorCode: AppErrorCode = 'PROVIDER_UNAVAILABLE',
   ): Promise<T> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (appConfig.OMNIDESK_PROXY_API_KEY) {
-      headers.Authorization = `Bearer ${appConfig.OMNIDESK_PROXY_API_KEY}`
+    const token = await accountAuthService.ensureFreshAccessToken()
+    if (!token) {
+      throw new AppError('ACCOUNT_NOT_AUTHENTICATED', 'Connectez-vous pour utiliser les appels.')
     }
-
-    let response: Response
-    try {
-      response = await fetch(`${this.baseUrl()}${path}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body ?? {}),
-      })
-    } catch (cause) {
-      logger.error('OmniProxy injoignable', { path, cause: String(cause) })
-      throw new AppError(
-        errorCode,
-        "OmniProxy est injoignable. Verifiez qu'il est demarre et que OMNIDESK_PROXY_URL est correct.",
-      )
+    const url = `${this.baseUrl()}${path}`
+    let result = await postJson<T>(url, { ...body, auth: token })
+    // Email non verifie : rejouer n'aiderait pas. On resynchronise l'etat (passera en
+    // 'unverified' -> ecran de verification) et on remonte une erreur explicite.
+    if (!result.ok && result.status === 403 && result.error?.error === 'EMAIL_NOT_VERIFIED') {
+      void accountAuthService.refreshUser()
+      throw new AppError('ACCOUNT_EMAIL_NOT_VERIFIED', 'Verifie ton adresse email pour utiliser les appels.')
     }
-
-    const text = await response.text()
-    let payload: unknown
-    try {
-      payload = text ? JSON.parse(text) : undefined
-    } catch {
-      throw new AppError(errorCode, `Reponse OmniProxy illisible (HTTP ${response.status}).`)
+    if (!result.ok && (result.status === 401 || result.status === 403)) {
+      const fresh = await accountAuthService.refreshNow()
+      result = await postJson<T>(url, { ...body, auth: fresh })
     }
-
-    if (!response.ok) {
-      const errorBody = (payload ?? {}) as ProxyErrorBody
-      throw new AppError(errorCode, errorBody.message ?? `OmniProxy a renvoye HTTP ${response.status}.`, {
-        proxyError: errorBody.error,
-        status: response.status,
-      })
+    if (!result.ok || result.data === undefined) {
+      throw this.toError(result, errorCode)
     }
+    return result.data
+  }
 
-    return payload as T
+  private toError(result: JsonResult<unknown>, errorCode: AppErrorCode): AppError {
+    const error = (result.error ?? {}) as JsonError
+    return new AppError(errorCode, error.message ?? `OmniProxy a renvoye HTTP ${result.status}.`, {
+      proxyError: error.error,
+      status: result.status,
+    })
   }
 
   // --- LiveKit (appels ad-hoc) ---
   // Jeton d'appel : le proxy (autorite) ne mint que pour l'hote/les invites de CET
-  // appel. Preuve d'identite HMAC ajoutee si la signature est active (anti-usurpation).
+  // appel ; `identity` (= email du compte) est prouvee par le JWT du champ `auth`.
   callToken(input: CallTokenInput): Promise<LivekitTokenResult> {
-    const auth = appConfig.OMNIDESK_OMNICHAT_TOKEN
-    return this.post<LivekitTokenResult>('/livekit/call-token', auth ? { ...input, auth } : input)
+    return this.postLivekit<LivekitTokenResult>('/livekit/call-token', { ...input })
   }
 
   startRecording(callId: string, room: string, identity?: string): Promise<{ egressId: string }> {
-    const auth = appConfig.OMNIDESK_OMNICHAT_TOKEN
-    return this.post<{ egressId: string }>('/livekit/recordings/start', {
+    return this.postLivekit<{ egressId: string }>('/livekit/recordings/start', {
       callId,
       room,
       ...(identity ? { identity } : {}),
-      ...(auth ? { auth } : {}),
     })
   }
 
   stopRecording(egressId: string, identity?: string): Promise<{ ok: true }> {
-    const auth = appConfig.OMNIDESK_OMNICHAT_TOKEN
-    return this.post<{ ok: true }>('/livekit/recordings/stop', {
+    return this.postLivekit<{ ok: true }>('/livekit/recordings/stop', {
       egressId,
       ...(identity ? { identity } : {}),
-      ...(auth ? { auth } : {}),
     })
   }
 }

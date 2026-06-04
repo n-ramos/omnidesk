@@ -1,28 +1,16 @@
 import os from 'node:os'
-import { randomUUID } from 'node:crypto'
-import type { Database } from 'better-sqlite3'
 import { AppError } from '@shared/errors'
 import type { OmnichatTokenResult } from '@shared/ipc'
-import { AppSettingsRepository } from '@main/database/repositories/appSettingsRepository'
-import { OmnichatIdentityService } from '@main/omnichat/omnichatIdentityService'
+import { accountAuthService } from '@main/account/accountAuthService'
 import { omniProxyClient } from '@main/proxy/omniProxyClient'
 
 // Les appels utilisent des salles ad-hoc (omnichat:call:<uuid>) decorrelees des
 // conversations. L'acces est autorise par OmniProxy (hote/invites uniquement), donc
-// connaitre l'id de salle ne suffit pas a rejoindre. Identite LiveKit = identite
-// omnichat si definie, sinon UUID de poste stable et persistant.
-const IDENTITY_KEY = 'omnichatIdentity'
+// connaitre l'id de salle ne suffit pas a rejoindre. Identite LiveKit = email du
+// compte connecte (impose par OmniProxy via le JWT du champ `auth`).
 const CALL_ROOM_PREFIX = 'omnichat:call:'
 
 export class OmnichatService {
-  private readonly settings: AppSettingsRepository
-  private readonly identityService: OmnichatIdentityService
-
-  constructor(db: Database) {
-    this.settings = new AppSettingsRepository(db)
-    this.identityService = new OmnichatIdentityService(db)
-  }
-
   private ensureConfigured(): void {
     if (!omniProxyClient.isConfigured()) {
       throw new AppError(
@@ -32,20 +20,18 @@ export class OmnichatService {
     }
   }
 
-  // Identite LiveKit : identite omnichat (id) si choisie, sinon un UUID de poste stable
-  // (genere et persiste une fois). Doit correspondre a l'identite prouvee par HMAC quand
-  // la signature OmniProxy est active (cf. audit S6).
+  // Identite LiveKit = email du compte connecte. OmniProxy l'exige (403 IDENTITY_INVALID
+  // si `identity` != email du jeton) : aucun appel possible sans session active.
   private livekitIdentity(): string {
-    const existing = this.settings.get<string>(IDENTITY_KEY)
-    const fallback = existing ?? randomUUID()
-    if (!existing) {
-      this.settings.set<string>(IDENTITY_KEY, fallback)
+    const email = accountAuthService.currentEmail()
+    if (!email) {
+      throw new AppError('ACCOUNT_NOT_AUTHENTICATED', 'Connectez-vous pour passer un appel.')
     }
-    return this.identityService.peek()?.id ?? fallback
+    return email
   }
 
   private livekitName(): string {
-    return this.identityService.peek()?.pseudo || os.userInfo().username || 'Invite'
+    return accountAuthService.currentDisplayName() || os.userInfo().username || 'Invite'
   }
 
   // Jeton LiveKit pour rejoindre la salle d'un appel ad-hoc. Le proxy (autorite) ne
