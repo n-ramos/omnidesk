@@ -16,6 +16,7 @@ import { SyncEngine } from '@main/sync/syncEngine'
 import { warnIfDiskUnencrypted } from '@main/security/diskEncryption'
 import { autoUpdate } from '@main/update/autoUpdater'
 import { PRELOAD_EVENTS } from '@shared/ipc'
+import type { GithubLinkEvent } from '@shared/github'
 
 let mainWindow: BrowserWindow | null = null
 const syncEngine = new SyncEngine()
@@ -44,6 +45,8 @@ let stopAiToolEndBridge: (() => void) | undefined
 let stopAiConfirmRequestBridge: (() => void) | undefined
 let stopHomeUpdatedBridge: (() => void) | undefined
 let stopAccountSessionBridge: (() => void) | undefined
+let stopGithubLinkBridge: (() => void) | undefined
+let pendingGithubLinkEvent: GithubLinkEvent | undefined
 // Id du rebond du dock macOS declenche par un appel entrant (annule a la fin).
 let incomingCallBounceId: number | null = null
 
@@ -97,6 +100,19 @@ const isAppFrame = (frame: Electron.WebFrameMain | null | undefined): boolean =>
   return Boolean(
     frame && main && frame.processId === main.processId && frame.routingId === main.routingId,
   )
+}
+
+const refocusMainWindow = (): void => {
+  if (!mainWindow) {
+    return
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+  if (!mainWindow.isVisible()) {
+    mainWindow.show()
+  }
+  mainWindow.focus()
 }
 
 // Regles de permission communes a une session : micro/camera/capture restent reserves au
@@ -190,6 +206,10 @@ const createMainWindow = (): void => {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+    if (pendingGithubLinkEvent) {
+      mainWindow?.webContents.send(PRELOAD_EVENTS.GITHUB_LINK, pendingGithubLinkEvent)
+      pendingGithubLinkEvent = undefined
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -315,15 +335,44 @@ const createMainWindow = (): void => {
   }
 }
 
-app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
+app.on('second-instance', (_event, argv) => {
+  const deepLink = argv.find((arg) =>
+    arg.startsWith(`${appConfig.OMNIDESK_APP_PROTOCOL}://`),
+  )
+  if (deepLink) {
+    handleDeepLink(deepLink)
+  } else {
+    refocusMainWindow()
   }
 })
 
-app.on('open-url', (event) => {
+// Deep links omnidesk:// (macOS : evenement open-url ; le DMG cible macOS). Un seul cas pour
+// l'instant : le retour du flux OAuth GitHub (omnidesk://github/connected?status=ok|error), qui
+// ne transporte AUCUN secret -- juste un signal pour ramener l'app au premier plan et faire
+// rafraichir le statut GitHub cote renderer.
+function handleDeepLink(rawUrl: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    return
+  }
+  if (parsed.protocol !== `${appConfig.OMNIDESK_APP_PROTOCOL}:`) {
+    return
+  }
+  if (parsed.hostname === 'github' && parsed.pathname.replace(/^\/+/, '') === 'connected') {
+    const status = parsed.searchParams.get('status') === 'error' ? 'error' : 'ok'
+    const reason = parsed.searchParams.get('reason') ?? undefined
+    const event: GithubLinkEvent = { status, reason }
+    pendingGithubLinkEvent = !mainWindow || mainWindow.webContents.isLoading() ? event : undefined
+    eventBus.emit('github:link', event)
+  }
+  refocusMainWindow()
+}
+
+app.on('open-url', (event, url) => {
   event.preventDefault()
+  handleDeepLink(url)
 })
 
 // Nom affiche partout (menu macOS via le role appMenu, notifications natives, dossier
@@ -496,6 +545,11 @@ app.whenReady().then(() => {
       signalingClient.stop()
     }
   })
+  // Pont retour OAuth GitHub -> renderer (rafraichit le statut / tableau de bord GitHub).
+  // webContents.send no-op si la fenetre n'existe pas encore.
+  stopGithubLinkBridge = eventBus.on('github:link', (payload) => {
+    mainWindow?.webContents.send(PRELOAD_EVENTS.GITHUB_LINK, payload)
+  })
   // Verrouillage du coffre a la mise en veille et au verrouillage de session OS. L'auto-lock par
   // inactivite (cote service) reste le filet principal. Le verrouillage sur simple perte de focus
   // est volontairement ecarte en M0 : trop agressif tant que le deverrouillage biometrique (M3)
@@ -543,6 +597,7 @@ app.on('before-quit', () => {
   stopAiConfirmRequestBridge?.()
   stopHomeUpdatedBridge?.()
   stopAccountSessionBridge?.()
+  stopGithubLinkBridge?.()
   signalingClient.stop()
   accountAuthService.stop()
   syncEngine.stop()

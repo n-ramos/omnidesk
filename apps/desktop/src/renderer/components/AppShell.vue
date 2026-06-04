@@ -12,6 +12,7 @@ import NotificationsView from '@renderer/components/NotificationsView.vue'
 import OmniBrowserView from '@renderer/components/browser/OmniBrowserView.vue'
 import OmnichatView from '@renderer/components/OmnichatView.vue'
 import OmnipassView from '@renderer/components/OmnipassView.vue'
+import GithubView from '@renderer/components/GithubView.vue'
 import TopBar from '@renderer/components/TopBar.vue'
 import WebpageView from '@renderer/components/WebpageView.vue'
 import WindowChrome from '@renderer/components/WindowChrome.vue'
@@ -207,6 +208,7 @@ onMounted(() => {
           <OmniBrowserView v-else-if="store.activeView === 'browser'" />
           <OmnichatView v-else-if="store.activeView === 'omnichat'" />
           <OmnipassView v-else-if="store.activeView === 'omnipass'" />
+          <GithubView v-else-if="store.activeView === 'github'" />
           <SettingsView v-else />
         </template>
       </section>

@@ -3,7 +3,7 @@ import type { OmniBrowserShortcutAction } from './shortcuts'
 export type ISODateString = string
 export type UUID = string
 
-export type ProviderKind = 'teams' | 'slack' | 'outlook' | 'imap' | 'webpage' | 'omnichat'
+export type ProviderKind = 'teams' | 'slack' | 'outlook' | 'imap' | 'webpage' | 'omnichat' | 'github'
 
 export type ProviderCapability =
   | 'password-auth'

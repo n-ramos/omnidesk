@@ -1,7 +1,7 @@
 import { appConfig } from '@main/config/env'
 import { AppError, type AppErrorCode } from '@shared/errors'
 import { accountAuthService } from '@main/account/accountAuthService'
-import { postJson, type JsonError, type JsonResult } from '@main/proxy/httpJson'
+import { getJson, postJson, type JsonError, type JsonResult } from '@main/proxy/httpJson'
 
 export interface CallTokenInput {
   callId: string
@@ -92,6 +92,56 @@ class OmniProxyClient {
       egressId,
       ...(identity ? { identity } : {}),
     })
+  }
+
+  // --- Routes protegees generiques (en-tete Authorization: Bearer <JWT compte>) ---
+  // Utilisees par les providers qui passent par le proxy (ex. GitHub). Meme strategie que
+  // postLivekit -- refresh proactif puis rejeu UNE fois sur 401/403 -- mais le jeton voyage
+  // dans l'EN-TETE (et non le corps), conformement aux routes /github/* et /auth/me.
+  authedGet<T>(path: string, errorCode: AppErrorCode = 'PROVIDER_UNAVAILABLE'): Promise<T> {
+    const url = `${this.baseUrl()}${path}`
+    return this.sendAuthed<T>(
+      (token) => getJson<T>(url, { Authorization: `Bearer ${token}` }),
+      errorCode,
+    )
+  }
+
+  authedPost<T>(
+    path: string,
+    body: Record<string, unknown> = {},
+    errorCode: AppErrorCode = 'PROVIDER_UNAVAILABLE',
+  ): Promise<T> {
+    const url = `${this.baseUrl()}${path}`
+    return this.sendAuthed<T>(
+      (token) => postJson<T>(url, body, { Authorization: `Bearer ${token}` }),
+      errorCode,
+    )
+  }
+
+  private async sendAuthed<T>(
+    send: (token: string) => Promise<JsonResult<T>>,
+    errorCode: AppErrorCode,
+  ): Promise<T> {
+    const token = await accountAuthService.ensureFreshAccessToken()
+    if (!token) {
+      throw new AppError('ACCOUNT_NOT_AUTHENTICATED', 'Connectez-vous pour effectuer cette action.')
+    }
+    let result = await send(token)
+    if (!result.ok && result.status === 403 && result.error?.error === 'EMAIL_NOT_VERIFIED') {
+      void accountAuthService.refreshUser()
+      throw new AppError(
+        'ACCOUNT_EMAIL_NOT_VERIFIED',
+        'Verifie ton adresse email pour effectuer cette action.',
+      )
+    }
+    if (!result.ok && (result.status === 401 || result.status === 403)) {
+      const fresh = await accountAuthService.refreshNow()
+      result = await send(fresh)
+    }
+    if (!result.ok || result.data === undefined) {
+      throw this.toError(result, errorCode)
+    }
+    return result.data
   }
 }
 

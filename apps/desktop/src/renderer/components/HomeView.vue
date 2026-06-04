@@ -5,7 +5,12 @@ import ProviderLogo from '@renderer/components/ui/ProviderLogo.vue'
 import StatusBadge from '@renderer/components/ui/StatusBadge.vue'
 import { useAppStore } from '@renderer/stores/appStore'
 import type { ProviderKind } from '@shared/models'
-import { WEB_SERVICE_PRESETS, type WebServicePreset } from '@shared/webServices'
+import {
+  APP_SERVICE_PRESETS,
+  WEB_SERVICE_PRESETS,
+  type AppServicePreset,
+  type WebServicePreset,
+} from '@shared/webServices'
 
 const store = useAppStore()
 
@@ -25,6 +30,8 @@ const iconTint = (id: ProviderKind): string => {
       return 'bg-accent-coral/12 text-accent-coral'
     case 'omnichat':
       return 'bg-accent-mint/12 text-accent-mint'
+    case 'github':
+      return 'bg-accent-lilac/12 text-accent-lilac'
   }
 }
 
@@ -33,6 +40,10 @@ const iconTint = (id: ProviderKind): string => {
 // services proposes par l'application.
 const connectWebService = async (preset: WebServicePreset): Promise<void> => {
   await store.connectWebpageAccount({ label: preset.label, url: preset.url })
+}
+
+const connectAppService = async (preset: AppServicePreset): Promise<void> => {
+  await store.connectProvider(preset.id)
 }
 </script>
 
@@ -122,6 +133,36 @@ const connectWebService = async (preset: WebServicePreset): Promise<void> => {
               </div>
               <div class="flex shrink-0 items-center gap-3">
                 <StatusBadge tone="success">Mode web</StatusBadge>
+                <ArrowRight
+                  :size="16"
+                  class="text-zinc-500 transition group-hover:translate-x-0.5 group-hover:text-zinc-200"
+                />
+              </div>
+            </div>
+          </div>
+        </button>
+
+        <button
+          v-for="service in APP_SERVICE_PRESETS"
+          :key="service.id"
+          class="group rounded-2xl bg-white/[0.045] p-5 text-left shadow-line transition duration-150 hover:-translate-y-0.5 hover:bg-white/[0.08] hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-mint/40"
+          type="button"
+          @click="connectAppService(service)"
+        >
+          <div class="flex items-start gap-4">
+            <div
+              class="grid size-12 shrink-0 place-items-center rounded-2xl"
+              :class="iconTint(service.id)"
+            >
+              <ProviderLogo :provider-id="service.id" :size="22" />
+            </div>
+            <div class="flex min-w-0 flex-1 items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h3 class="text-base font-semibold text-white">{{ service.label }}</h3>
+                <p class="mt-1.5 text-sm leading-6 text-zinc-400">{{ service.description }}</p>
+              </div>
+              <div class="flex shrink-0 items-center gap-3">
+                <StatusBadge tone="success">{{ service.badge }}</StatusBadge>
                 <ArrowRight
                   :size="16"
                   class="text-zinc-500 transition group-hover:translate-x-0.5 group-hover:text-zinc-200"

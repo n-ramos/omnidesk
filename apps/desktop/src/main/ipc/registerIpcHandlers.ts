@@ -49,6 +49,7 @@ import { createAiProvider } from '@main/ai/aiProviderFactory'
 import { aiAgentService } from '@main/ai/aiAgent'
 import { registerMailActions, registerWidgetActions } from '@main/ai/actions'
 import { aiSecretVault } from '@main/security/aiSecretVault'
+import { githubService } from '@main/github/githubService'
 import { registerValidatedHandler } from './createIpcRouter'
 
 const providerIdSchema = z.enum(['imap', 'webpage'])
@@ -2116,5 +2117,26 @@ export const registerIpcHandlers = (
       }
     },
     { redactPayload: true },
+  )
+
+  // --- Provider GitHub (lien OAuth + tableau de bord, via OmniProxy) ---
+  // Aucun secret cote app : le proxy detient le client_secret et le token GitHub.
+  // Cf. docs/github-provider-contract.md.
+  registerValidatedHandler(IPC_CHANNELS.GITHUB_GET_STATUS, z.undefined(), () =>
+    githubService.getStatus(),
+  )
+
+  registerValidatedHandler(IPC_CHANNELS.GITHUB_CONNECT, z.undefined(), () =>
+    githubService.connect(),
+  )
+
+  registerValidatedHandler(IPC_CHANNELS.GITHUB_DISCONNECT, z.undefined(), () =>
+    githubService.disconnect(),
+  )
+
+  registerValidatedHandler(
+    IPC_CHANNELS.GITHUB_GET_SUMMARY,
+    z.object({ limit: z.number().int().min(1).max(100).optional() }).optional(),
+    (payload) => githubService.getSummary(payload?.limit),
   )
 }

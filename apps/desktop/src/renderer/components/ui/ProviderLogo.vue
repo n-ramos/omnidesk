@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Globe, Mail, MessageCircle } from 'lucide-vue-next'
+import { Github, Globe, Mail, MessageCircle } from 'lucide-vue-next'
 import type { ProviderKind } from '@shared/models'
 
 const props = withDefaults(
@@ -165,6 +165,8 @@ const showFavicon = computed(
   <Globe v-else-if="providerId === 'webpage'" :size="size" />
 
   <MessageCircle v-else-if="providerId === 'omnichat'" :size="size" />
+
+  <Github v-else-if="providerId === 'github'" :size="size" />
 
   <Mail v-else :size="size" />
 </template>

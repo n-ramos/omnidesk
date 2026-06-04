@@ -49,6 +49,7 @@ import type {
   AiToolStartEvent,
 } from '@shared/ai'
 import type { AuthStatus } from '@shared/auth'
+import type { GithubLinkEvent } from '@shared/github'
 
 const invoke = <Channel extends IpcChannel>(
   channel: Channel,
@@ -86,6 +87,14 @@ export interface OmnideskApi {
     updateProfile: (
       displayName: string,
     ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.AUTH_UPDATE_PROFILE]>
+  }
+  github: {
+    getStatus: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.GITHUB_GET_STATUS]>
+    connect: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.GITHUB_CONNECT]>
+    disconnect: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.GITHUB_DISCONNECT]>
+    getSummary: (
+      limit?: number,
+    ) => Promise<IpcResponseMap[typeof IPC_CHANNELS.GITHUB_GET_SUMMARY]>
   }
   providers: {
     list: () => Promise<IpcResponseMap[typeof IPC_CHANNELS.PROVIDERS_LIST]>
@@ -636,6 +645,7 @@ export interface OmnideskApi {
     onAiConfirmRequest: (listener: (event: AiConfirmRequestEvent) => void) => () => void
     onHomeUpdated: (listener: () => void) => () => void
     onAuthState: (listener: (status: AuthStatus) => void) => () => void
+    onGithubLink: (listener: (event: GithubLinkEvent) => void) => () => void
   }
 }
 
@@ -658,6 +668,13 @@ export const omnideskApi: OmnideskApi = {
     forgotPassword: (email) => invoke(IPC_CHANNELS.AUTH_FORGOT_PASSWORD, { email }),
     resetPassword: (input) => invoke(IPC_CHANNELS.AUTH_RESET_PASSWORD, input),
     updateProfile: (displayName) => invoke(IPC_CHANNELS.AUTH_UPDATE_PROFILE, { displayName }),
+  },
+  github: {
+    getStatus: () => invoke(IPC_CHANNELS.GITHUB_GET_STATUS, undefined),
+    connect: () => invoke(IPC_CHANNELS.GITHUB_CONNECT, undefined),
+    disconnect: () => invoke(IPC_CHANNELS.GITHUB_DISCONNECT, undefined),
+    getSummary: (limit) =>
+      invoke(IPC_CHANNELS.GITHUB_GET_SUMMARY, limit === undefined ? undefined : { limit }),
   },
   providers: {
     list: () => invoke(IPC_CHANNELS.PROVIDERS_LIST, undefined),
@@ -1208,6 +1225,17 @@ export const omnideskApi: OmnideskApi = {
 
       ipcRenderer.on(PRELOAD_EVENTS.AUTH_STATE, wrappedListener)
       return () => ipcRenderer.off(PRELOAD_EVENTS.AUTH_STATE, wrappedListener)
+    },
+    onGithubLink: (listener) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        payload: GithubLinkEvent,
+      ): void => {
+        listener(payload)
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.GITHUB_LINK, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.GITHUB_LINK, wrappedListener)
     },
   },
 }
