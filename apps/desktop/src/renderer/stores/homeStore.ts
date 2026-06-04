@@ -8,10 +8,14 @@ interface HomeState {
   isEditing: boolean
   isLoading: boolean
   isLoaded: boolean
+  subscribed: boolean
   error?: string
 }
 
 const GRID_COLS = 12
+
+// Disposer de l'abonnement "accueil modifie par l'IA" (module-level, comme omnichatStore).
+let stopHomeUpdated: (() => void) | undefined
 
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -40,6 +44,7 @@ export const useHomeStore = defineStore('home', {
     isEditing: false,
     isLoading: false,
     isLoaded: false,
+    subscribed: false,
   }),
 
   getters: {
@@ -47,7 +52,33 @@ export const useHomeStore = defineStore('home', {
   },
 
   actions: {
+    // L'IA peut modifier l'accueil (widgets/config) cote main : on recharge alors la disposition,
+    // sauf pendant une edition utilisateur (pour ne pas ecraser un glisser-deposer en cours).
+    ensureLiveSync(): void {
+      if (this.subscribed) return
+      const api = window.omnidesk
+      if (!api?.events?.onHomeUpdated) return
+      stopHomeUpdated?.()
+      stopHomeUpdated = api.events.onHomeUpdated(() => {
+        if (this.isEditing) return
+        void this.reloadFromDisk()
+      })
+      this.subscribed = true
+    },
+
+    async reloadFromDisk(): Promise<void> {
+      const api = window.omnidesk
+      if (!api?.home?.getLayout) return
+      try {
+        const layout = await api.home.getLayout()
+        this.widgets = layout.widgets
+      } catch {
+        // Rechargement best-effort : on garde la disposition courante en cas d'echec.
+      }
+    },
+
     async loadLayout(): Promise<void> {
+      this.ensureLiveSync()
       const api = window.omnidesk
       if (!api?.home?.getLayout) {
         if (!this.isLoaded) {

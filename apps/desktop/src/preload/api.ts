@@ -615,6 +615,7 @@ export interface OmnideskApi {
     onAiToolStart: (listener: (event: AiToolStartEvent) => void) => () => void
     onAiToolEnd: (listener: (event: AiToolEndEvent) => void) => () => void
     onAiConfirmRequest: (listener: (event: AiConfirmRequestEvent) => void) => () => void
+    onHomeUpdated: (listener: () => void) => () => void
   }
 }
 
@@ -1161,6 +1162,14 @@ export const omnideskApi: OmnideskApi = {
 
       ipcRenderer.on(PRELOAD_EVENTS.AI_CONFIRM_REQUEST, wrappedListener)
       return () => ipcRenderer.off(PRELOAD_EVENTS.AI_CONFIRM_REQUEST, wrappedListener)
+    },
+    onHomeUpdated: (listener) => {
+      const wrappedListener = (): void => {
+        listener()
+      }
+
+      ipcRenderer.on(PRELOAD_EVENTS.HOME_UPDATED, wrappedListener)
+      return () => ipcRenderer.off(PRELOAD_EVENTS.HOME_UPDATED, wrappedListener)
     },
   },
 }

@@ -46,7 +46,7 @@ import { getChangelog } from '@main/update/changelog'
 import { aiSettingsService } from '@main/ai/aiSettingsService'
 import { createAiProvider } from '@main/ai/aiProviderFactory'
 import { aiAgentService } from '@main/ai/aiAgent'
-import { registerMailActions } from '@main/ai/actions'
+import { registerMailActions, registerWidgetActions } from '@main/ai/actions'
 import { aiSecretVault } from '@main/security/aiSecretVault'
 import { registerValidatedHandler } from './createIpcRouter'
 
@@ -245,6 +245,14 @@ export const registerIpcHandlers = (
   // Actions IA disponibles pour l'assistant (lecture/gestion des mails). Enregistrees ici car
   // elles reutilisent les services deja instancies.
   registerMailActions({ accounts, conversations, providerConnections })
+  registerWidgetActions({
+    homeLayout,
+    reminders: reminderScheduler,
+    notifications,
+    accounts,
+    conversations,
+    providerConnections,
+  })
 
   registerValidatedHandler(IPC_CHANNELS.APP_GET_BOOTSTRAP, z.undefined(), () => ({
     appVersion: app.getVersion(),

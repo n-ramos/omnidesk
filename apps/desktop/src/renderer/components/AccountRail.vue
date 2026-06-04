@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Compass, House, KeyRound, Plus, Settings, Unplug, Video, Volume2, VolumeX } from 'lucide-vue-next'
+import { Bot, Compass, House, KeyRound, Plus, Settings, Unplug, Video, Volume2, VolumeX } from 'lucide-vue-next'
 import ProviderLogo from '@renderer/components/ui/ProviderLogo.vue'
 import { confirm } from '@renderer/composables/useConfirm'
 import { useOmnichat } from '@renderer/composables/useOmnichat'
 import { webpageController } from '@renderer/services/webpageController'
 import { useAppStore } from '@renderer/stores/appStore'
 import type { WebpageMediaState } from '@renderer/stores/appStore'
+import { useAiChatStore } from '@renderer/stores/aiChatStore'
 import type { AccountSummary } from '@shared/models'
 
 const store = useAppStore()
 const omnichat = useOmnichat()
+const chat = useAiChatStore()
 
 // Tuiles du rail = slots cibles par les raccourcis Cmd/Ctrl+1..9 (getter partage avec
 // l'appStore). Le compte "self" omnichat, ancrage interne, en est deja exclu.
@@ -247,6 +249,20 @@ const formatBadge = (count: number): string => (count > 99 ? '99+' : String(coun
       @click="store.setView('omnipass')"
     >
       <KeyRound :size="18" />
+    </button>
+
+    <button
+      class="app-no-drag grid size-10 place-items-center rounded-xl transition"
+      :class="
+        chat.open
+          ? 'bg-white/[0.12] text-accent-mint shadow-[inset_0_0_0_2px_rgba(45,184,128,0.95),0_0_14px_-4px_rgba(45,184,128,0.45)]'
+          : 'text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100'
+      "
+      title="Assistant IA (Elodie)"
+      type="button"
+      @click="chat.toggle()"
+    >
+      <Bot :size="18" />
     </button>
 
     <div class="my-2 h-px w-8 bg-white/[0.08]" />

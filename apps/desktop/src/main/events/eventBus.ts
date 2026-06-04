@@ -46,6 +46,8 @@ interface AppEventMap {
   'ai:tool-start': AiToolStartEvent
   'ai:tool-end': AiToolEndEvent
   'ai:confirm-request': AiConfirmRequestEvent
+  // Accueil personnalise modifie par l'IA (widgets/config) -> le renderer recharge la disposition.
+  'home:updated': Record<string, never>
 }
 
 type AppEventName = keyof AppEventMap
